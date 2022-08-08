@@ -1,2 +1,2 @@
-## Docs coming soon
+## The project and docs coming soon
 ...
