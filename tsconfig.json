@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2015",
+    "esModuleInterop": false,
+    "module": "es6",
+    "outDir": "./dist/modules",
+    "moduleResolution": "node",
+    "noEmitOnError": true,
+    "declaration": true,
+    "declarationDir": "./dist/dts",
+    "strictNullChecks": true
+  },
+  "include": ["./src/index.ts", "./src/index.cjs.ts", "./src/index.global.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,44 @@
+{
+    "name": "ui-dom",
+    "version": "1.6.2",
+    "description": "Powerful state based rendering library (in JS/TS) - inspired by React, but totally reconceptualized.",
+    "keywords": [
+        "ui-dom",
+        "uidom",
+        "ui",
+        "dom",
+        "render",
+        "react",
+        "user interface",
+        "virtual dom",
+        "front-end",
+        "library",
+        "framework"
+    ],
+    "homepage": "https://uidomjs.org",
+    "author": "Mikael Saurén",
+    "license": "MIT",
+    "private": false,
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ui-dom/ui-dom.git"
+    },
+    "module": "./dist/ui-dom.module.js",
+    "main": "./dist/ui-dom.js",
+    "types": "./dist/ui-dom.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/ui-dom.module.js",
+            "require": "./dist/ui-dom.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "test" : "echo \"Error: no test specified\" && exit 1"
+    },
+    "devDependencies": {},
+    "dependencies": {}
+}
