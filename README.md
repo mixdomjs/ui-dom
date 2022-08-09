@@ -9,3 +9,7 @@ See docs, examples and more at: [uidomjs.org](https://uidomjs.org)
 ## NPM
 
 The npm package can be found at: [ui-dom](https://www.npmjs.com/package/ui-dom)
+
+## Source
+
+The source files will be coming soonish - around v1.7.0
