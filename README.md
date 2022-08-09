@@ -6,3 +6,6 @@ uiDom is a state based DOM rendering library in JavaScript/TypeScript. It provid
 
 See docs, examples and more at: [uidomjs.org](https://uidomjs.org)
 
+## NPM
+
+The npm package can be found at: [ui-dom](https://www.npmjs.com/package/ui-dom)
