@@ -12,13 +12,17 @@
 
 ### Fixes
 
-- Fixed recognizing mixins of Context and Host.
+- Fixed recognizing mixin versions of UIContext and UIHost.
 
 ### Package
 
-- Fixed log in CHANGES.md v1.6.2: src not included yet - but it is in this version.
+- Fixed log in CHANGES.md v1.6.2: src not included in the npm package. Instead, the source files can be found at the GitHub repo: https://github.com/ui-dom/ui-dom.git
+
+### GitHub
+
+- Update all to version 1.7.0.
+- Included the src folder and dev stuff into the GitHub repo.
 - Added CONTRIBUTING.md.
-- Included the src folder and dev stuff into the package.
 
 ---
 
