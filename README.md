@@ -12,5 +12,5 @@ The npm package can be found with: [ui-dom](https://www.npmjs.com/package/ui-dom
 
 ## GitHub
 
-The github project at: [ui-dom](https://github.com/ui-dom/ui-dom.git)
+Contribute in GitHub: [ui-dom/ui-dom.git](https://github.com/ui-dom/ui-dom.git)
 
