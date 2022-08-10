@@ -1,3 +1,27 @@
+## v1.7.0
+
+### Features
+
+- Supported inserting multiple contexts with one uiDom.Contexts: `<uiDom.Contexts contexts={namedContexts}>...</uiDom.Context>`
+
+### Changes
+
+- Removed inserting context by `<uiDom.Context name="themes" context={themesContext}>`. Instead all are inserted by `<uiDom.Contexts contexts={namedContexts}>`.
+- In relation to above, changed that UIContext class / mixin does not care for props anymore, and can accept data and settings instead.
+- Changed the def type detection to use UI_DOM_TYPE static member in all cases and added it to the pseudo classes.
+
+### Fixes
+
+- Fixed recognizing mixins of Context and Host.
+
+### Package
+
+- Fixed log in CHANGES.md v1.6.2: src not included yet - but it is in this version.
+- Added CONTRIBUTING.md.
+- Included the src folder and dev stuff into the package.
+
+---
+
 ## v1.6.2
 
 ### Changes
@@ -7,7 +31,6 @@
 ### Package
 
 - Added more info.
-- Included the src folder and dev sides into the package.
 - Included LICENSE and CHANGES.md (this file) into the package.
 - Renamed dist/index* to dist/ui-dom*.
 - Renamed the global file to be UIDom.js while ui-dom.js is the file for cjs require.

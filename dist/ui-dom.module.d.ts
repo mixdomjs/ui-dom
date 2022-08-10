@@ -37,15 +37,16 @@ declare class UIContextServices {
     static sortCollection(collection: Map<UILiveSource, Set<string>>): Map<UILiveSource, Set<string>>;
 }
 
-declare type UIContextProps<Data extends UIContextData = any, Actions extends UIActions = {}> = {
-    name: string;
-    context: UIContext<Data, Actions> | null;
+declare type UIContextSettingsUpdate = {
+    refreshTimeout?: null | number;
+    postActions?: null | string | string[] | Set<string>;
+    quickActions?: true | null | string | string[] | Set<string>;
 };
 declare function UIContextMixin(Base: ClassType): {
-    new (_props?: UIContextProps, ...passArgs: any[]): {
+    new (data: any, settings: UIContextSettingsUpdate | null | undefined, ...passArgs: any[]): {
         /** The roots where this context is inserted.
          * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-        roots: Map<GroundedTreeNodeContext, string>;
+        roots: Map<GroundedTreeNodeContexts, string>;
         /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
         dataBoundaries: Map<UILiveSource, Set<string>>;
         /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
@@ -77,11 +78,7 @@ declare function UIContextMixin(Base: ClassType): {
         /** Internal services to keep the whole thing together and synchronized.
          * They are the semi-private internal part of UIContext, so separated into its own class. */
         services: UIContextServices;
-        modifySettings(settings: {
-            postActions?: null | string | string[] | Set<string>;
-            quickActions?: true | null | string | string[] | Set<string>;
-            refreshTimeout?: null | number;
-        }): void;
+        modifySettings(settings: UIContextSettingsUpdate): void;
         addAsPostActions(actionTypes: null | string | string[] | Set<string>, extend?: boolean): void;
         addAsQuickActions(actionTypes: true | null | string | string[] | Set<string>, extend?: boolean): void;
         addActionHandler(listener: UIUponPreAction, actionTypes?: string | string[] | true): void;
@@ -121,10 +118,10 @@ declare function UIContextMixin(Base: ClassType): {
     addToSettingsActions(settings: UIContext["settings"], prop: "quickActions" | "postActions", actionTypes: true | null | string | string[] | Set<string>, extend?: boolean): void;
 };
 declare const UIContext_base: {
-    new (_props?: UIContextProps<any, {}> | undefined, ...passArgs: any[]): {
+    new (data: any, settings: UIContextSettingsUpdate | null | undefined, ...passArgs: any[]): {
         /** The roots where this context is inserted.
          * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-        roots: Map<GroundedTreeNodeContext, string>;
+        roots: Map<GroundedTreeNodeContexts, string>;
         /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
         dataBoundaries: Map<UILiveSource<{}, {}>, Set<string>>;
         /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
@@ -158,11 +155,7 @@ declare const UIContext_base: {
         /** Internal services to keep the whole thing together and synchronized.
          * They are the semi-private internal part of UIContext, so separated into its own class. */
         services: UIContextServices;
-        modifySettings(settings: {
-            postActions?: string | string[] | Set<string> | null | undefined;
-            quickActions?: string | true | string[] | Set<string> | null | undefined;
-            refreshTimeout?: number | null | undefined;
-        }): void;
+        modifySettings(settings: UIContextSettingsUpdate): void;
         addAsPostActions(actionTypes: string | string[] | Set<string> | null, extend?: boolean): void;
         addAsQuickActions(actionTypes: string | true | string[] | Set<string> | null, extend?: boolean): void;
         addActionHandler(listener: UIUponPreAction<UIContext<any, {}>>, actionTypes?: string | true | string[]): void;
@@ -221,7 +214,7 @@ interface UIContext<Data extends UIContextData = any, Actions extends UIActions 
     Actions: Actions;
     /** The roots where this context is inserted.
      * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-    roots: Map<GroundedTreeNodeContext, string>;
+    roots: Map<GroundedTreeNodeContexts, string>;
     /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
     dataBoundaries: Map<UILiveSource, Set<string>>;
     /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
@@ -336,20 +329,34 @@ interface UIContext<Data extends UIContextData = any, Actions extends UIActions 
      * - Note that if the live component was interested in the context, will use the .addToUpdates flow - so there might be a timeout before gets actually applied.
      * - Note that if !!refreshKeys is false, then will not add any refreshKeys. If there were none, will only update actions. */
     refresh(forceTimeout?: number | null): void;
-    onInsertInto?(treeNode: GroundedTreeNodeContext, name: string): void;
-    onRemoveFrom?(treeNode: GroundedTreeNodeContext): void;
+    onInsertInto?(treeNode: GroundedTreeNodeContexts, name: string): void;
+    onRemoveFrom?(treeNode: GroundedTreeNodeContexts): void;
     onDataInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
     onActionInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
 }
 declare class UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> extends UIContext_base {
-    constructor(props?: UIContextProps, ...args: any[]);
+    constructor(data?: Data, settings?: UIContextSettingsUpdate);
 }
 declare type UIContextType<Data extends UIContextData = any, Actions extends UIActions = {}> = {
-    new (_props?: UIContextProps | null): UIContext<Data, Actions>;
     readonly UI_DOM_TYPE: "Context";
+    new (data?: Data, settings?: UIContextSettingsUpdate): UIContext<Data, Actions>;
 };
 /** Create a new context. */
-declare const createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: Partial<UIContext["settings"]> | null) => UIContext<Data, Actions>;
+declare const createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: UIContextSettingsUpdate) => UIContext<Data, Actions>;
+declare type UIContextsProps<AllContexts extends UIAllContexts = {}> = {
+    /** Include many named contexts. */
+    cascade: AllContexts | null;
+};
+declare class UIContexts<AllContexts extends UIAllContexts = {}> {
+    static UI_DOM_TYPE: string;
+    /** It's not really included here, as it's just a type. */
+    contexts: AllContexts;
+    constructor(_props: UIContextsProps);
+}
+declare type UIContextsType<AllContexts extends UIAllContexts = {}> = {
+    readonly UI_DOM_TYPE: "Contexts";
+    new (props: UIContextsProps): UIContexts<AllContexts>;
+};
 /** Create multiple named contexts. (Useful for tunneling.) */
 declare const createContexts: <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts]: Contexts[Name_2]["data"]; }>(contextsData: AllData) => Contexts;
 
@@ -1241,6 +1248,7 @@ declare type UIRefType<Type extends Node | UISourceBoundary = Node | UISourceBou
 };
 
 declare class UISpread<Props extends Dictionary = {}> {
+    static UI_DOM_TYPE: string;
     constructor(_props?: Props | null);
     /** The renderer function to spread out the contents. */
     static render: UISpreadFunction;
@@ -1254,6 +1262,7 @@ declare class UISpread<Props extends Dictionary = {}> {
 interface UISpread {
 }
 declare type UISpreadType<Props extends Dictionary = {}> = {
+    readonly UI_DOM_TYPE: "Spread";
     new (_props?: Props | null): UISpread<Props>;
     /** The renderer function to spread out the contents. */
     render: UISpreadFunction;
@@ -1268,6 +1277,7 @@ declare const createSpread: <Props extends Dictionary<string, any> = {}>(func: U
     render: UISpreadFunction<Props>;
     /** The unfold method unique to this particular UISpread extended class. */
     unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null;
+    UI_DOM_TYPE: string;
     /** The universal method to unfold the spread. (The others are static too but based on an extending class.)
      * The contents are the cleaned childDefs that should replace any content pass. */
     unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[], keyScope: any): UIDefTarget | null;
@@ -1277,20 +1287,24 @@ declare type UIFragmentProps = UIGenericProps<{
     needsChildren?: boolean;
 }>;
 declare class UIFragment {
+    static UI_DOM_TYPE: string;
     constructor(_props?: UIFragmentProps | null);
 }
 declare type UIFragmentType = {
     new (_props?: UIFragmentProps | null): UIFragment;
+    readonly UI_DOM_TYPE: "Fragment";
 };
 declare type UIPortalProps = UIGenericProps & {
     container: Node | null;
     content?: UIRenderOutput;
 };
 declare class UIPortal {
+    static UI_DOM_TYPE: string;
     constructor(_props?: UIPortalProps);
 }
 declare type UIPortalType = {
     new (_props?: UIPortalProps): UIPortal;
+    readonly UI_DOM_TYPE: "Portal";
 };
 declare type UIElementProps<Type extends HTMLTags = HTMLTags> = UIGenericProps & UIHTMLProps<Type> & {
     element: HTMLElement | SVGElement | null;
@@ -1299,10 +1313,12 @@ declare type UIElementProps<Type extends HTMLTags = HTMLTags> = UIGenericProps &
     cloneMode?: boolean | UICloneNodeBehaviour | null;
 };
 declare class UIElement<Type extends HTMLTags = HTMLTags> {
+    static UI_DOM_TYPE: string;
     constructor(_props?: UIElementProps<Type>);
 }
 declare type UIElementType<Type extends HTMLTags = HTMLTags> = {
     new (_props?: UIElementProps): UIElement<Type>;
+    readonly UI_DOM_TYPE: "Element";
 };
 
 declare type NullLike = null | undefined;
@@ -1431,7 +1447,7 @@ declare type HTMLListenerAttributes = {
 declare type UIPreClassName<Valid extends string = string, Single extends string = Valid> = Single | Partial<Record<Valid, any>> | Array<Valid> | Set<Valid>;
 declare type UIDomTag = keyof HTMLElementTagNameMap | keyof SVGElementTagNameMap;
 declare type UIBoundaryTag = ClassType<UILive> | ClassType<UIWired> | UIFunction;
-declare type UIPreTag = ClassType<UIFragment> | ClassType<UIContext> | ClassType<UIElement> | ClassType<UIPortal> | UIDomTag | UIBoundaryTag;
+declare type UIPreTag = ClassType<UIFragment> | ClassType<UIContexts> | ClassType<UIElement> | ClassType<UIPortal> | UIDomTag | UIBoundaryTag;
 declare type UIPostTag = "" | "_" | UIDomTag | UIBoundaryTag | null;
 /** This tag conversion is used for internal tag based def mapping. The UIDefTarget is the uiDom.ContentPass. */
 declare type UIDefKeyTag = UIPostTag | UIDefTarget | UIFragmentType | UIHost;
@@ -1465,16 +1481,16 @@ declare type UIQuestionary<Value = any> = UIAction & {
 };
 declare type UIActions = UIAction | UIQuestion;
 declare type UIAllContexts = Record<string, UIContext<any, UIActions>>;
-declare type UIAllContextsWithNull<AllContexts extends UIAllContexts> = {
+declare type UIAllContextsWithNull<AllContexts extends UIAllContexts = {}> = {
     [Name in keyof AllContexts]: AllContexts[Name] | null;
 };
-declare type UIAllContextsDataWithNull<AllContexts extends UIAllContexts> = {
+declare type UIAllContextsDataWithNull<AllContexts extends UIAllContexts = {}> = {
     [Name in keyof AllContexts]: AllContexts[Name]["data"] | null;
 };
-declare type UIAllContextsData<AllContexts extends UIAllContexts> = {
+declare type UIAllContextsData<AllContexts extends UIAllContexts = {}> = {
     [Name in keyof AllContexts]: AllContexts[Name]["data"];
 };
-declare type UIAllContextsActions<AllContexts extends UIAllContexts> = {
+declare type UIAllContextsActions<AllContexts extends UIAllContexts = {}> = {
     [Name in keyof AllContexts]: AllContexts[Name]["Actions"];
 };
 /** Data listener. The listeners are run after the live component contextual calls are made. */
@@ -1507,7 +1523,7 @@ declare enum UIContextRefresh {
 declare enum UIContextAttach {
     /** The contexts that are inserted somewhere up the TreeNode structure cascading down to us. */
     Cascading = 1,
-    /** The contexts attached by the parent using the `ctxs` prop. */
+    /** The contexts attached by the parent using the `contexts` prop. */
     Parent = 2,
     /** The contexts manually overridden by `q.overrideContext()` or alike. */
     Overridden = 4,
@@ -1516,10 +1532,10 @@ declare enum UIContextAttach {
 }
 declare type UIProps<T = {}> = {
     key?: any;
-    /** Land one or many forwarded refs. */
+    /** Attach one or many forwarded refs. */
     ref?: UIRef | UIRef[];
-    /** Land one or many forwarded tunnels. */
-    ctxs?: Record<string, UIContext | null>;
+    /** Attach named contexts on a child - will not cascade down. */
+    contexts?: Record<string, UIContext | null>;
 } & T;
 declare type UIGenericProps<T = {}> = UIProps<T> & {
     class?: string;
@@ -1632,7 +1648,7 @@ declare type UISourceBoundaryChange = [UISourceBoundary, UISourceBoundaryChangeT
 declare type UIChangeInfos = [UIDomRenderInfo[], UISourceBoundaryChange[]];
 /** Describes what kind of def it is.
  * - Compared to treeNode.type, we have extra: "content" | "element" | "fragment". But don't have "root" (or ""). */
-declare type UIDefType = "dom" | "content" | "element" | "portal" | "boundary" | "pass" | "context" | "fragment" | "host";
+declare type UIDefType = "dom" | "content" | "element" | "portal" | "boundary" | "pass" | "contexts" | "fragment" | "host";
 interface UIDefBase<Props extends UIGenericPostProps = UIGenericPostProps> {
     /** This is to distinguish from other objects as well as to define the type both in the same.
      * - That's why it's name so strangely (to distinguish from objects), but still somewhat sensibly to be readible.
@@ -1657,8 +1673,7 @@ interface UIDefBase<Props extends UIGenericPostProps = UIGenericPostProps> {
     domPortal?: Node | null;
     contentPass?: UIContentClosure | null;
     contentPassType?: "pass" | "copy";
-    context?: UIContext | null;
-    contextName?: string;
+    contexts?: UIAllContextsWithNull | null;
     host?: UIHost;
     treeNode?: GroundedTreeNode;
 }
@@ -1712,11 +1727,10 @@ interface UIDefPass extends UIDefBase {
     contentPassType?: "pass" | "copy";
     props?: never;
 }
-interface UIDefContext extends UIDefBase {
-    _uiDefType: "context";
+interface UIDefContexts extends UIDefBase {
+    _uiDefType: "contexts";
     tag: null;
-    context: UIContext | null;
-    contextName: string;
+    contexts: UIAllContextsWithNull | null;
     props?: never;
 }
 interface UIDefHost extends UIDefBase {
@@ -1725,7 +1739,7 @@ interface UIDefHost extends UIDefBase {
     host: UIHost;
     props?: never;
 }
-declare type UIDefTypesAll = UIDefDom | UIDefContent | UIDefContentInner | UIDefElement | UIDefPortal | UIDefBoundary | UIDefPass | UIDefContext | UIDefFragment | UIDefHost;
+declare type UIDefTypesAll = UIDefDom | UIDefContent | UIDefContentInner | UIDefElement | UIDefPortal | UIDefBoundary | UIDefPass | UIDefContexts | UIDefFragment | UIDefHost;
 interface UIDefAppliedBase extends UIDefBase {
     childDefs: UIDefApplied[];
     action: "mounted" | "moved" | "updated";
@@ -1738,7 +1752,7 @@ interface UIDefTargetBase extends UIDefBase {
 }
 declare type UIDefApplied = UIDefAppliedBase & UIDefTypesAll;
 declare type UIDefTarget = UIDefTargetBase & UIDefTypesAll;
-declare type GroundedTreeNodeType = "dom" | "portal" | "boundary" | "pass" | "context" | "host" | "root";
+declare type GroundedTreeNodeType = "dom" | "portal" | "boundary" | "pass" | "contexts" | "host" | "root";
 interface GroundedTreeNodeBase {
     /** The main type of the treeNode that defines how it should behave and what it contains.
      * The type "" is only used temporarily - it can only end up in treeNodes if there's an error. */
@@ -1783,8 +1797,8 @@ interface GroundedTreeNodePortal extends GroundedTreeNodeBaseWithDef {
     /** For portals, the domNode refers to the external container. */
     domNode: GroundedTreeNodeBase["domNode"];
 }
-interface GroundedTreeNodeContext extends GroundedTreeNodeBaseWithDef {
-    type: "context";
+interface GroundedTreeNodeContexts extends GroundedTreeNodeBaseWithDef {
+    type: "contexts";
 }
 interface GroundedTreeNodeBoundary extends GroundedTreeNodeBaseWithDef {
     type: "boundary";
@@ -1800,7 +1814,7 @@ interface GroundedTreeNodePass extends GroundedTreeNodeBaseWithDef {
 interface GroundedTreeNodeHost extends GroundedTreeNodeBaseWithDef {
     type: "host";
 }
-declare type GroundedTreeNode = GroundedTreeNodeEmpty | GroundedTreeNodeDom | GroundedTreeNodePortal | GroundedTreeNodeContext | GroundedTreeNodeBoundary | GroundedTreeNodePass | GroundedTreeNodeHost | GroundedTreeNodeRoot;
+declare type GroundedTreeNode = GroundedTreeNodeEmpty | GroundedTreeNodeDom | GroundedTreeNodePortal | GroundedTreeNodeContexts | GroundedTreeNodeBoundary | GroundedTreeNodePass | GroundedTreeNodeHost | GroundedTreeNodeRoot;
 interface UIDefPseudo {
     _uiDefType?: "";
     childDefs: UIDefApplied[] | UIDefTarget[];
@@ -2151,12 +2165,13 @@ declare const uiDom: {
     RefMixin: typeof UIRefMixin;
     Effect: typeof UIEffect;
     EffectMixin: typeof UIEffectMixin;
-    /** Context allows to insert a down flowing context.
-     * Usage example: `<uiDom.Context name={myContextName} context={myContext}><div/></uiDom.Context>` */
     Context: typeof UIContext;
     ContextMixin: typeof UIContextMixin;
     /** ContextAttach flags to use with live.getAllContexts(flags: ContextAttach). */
     ContextAttach: typeof UIContextAttach;
+    /** Allows to attach multiple contexts simultaneously.
+     * Usage example: `<uiDom.Contexts cascade={{namedContexts}}><div/></uiDom.Contexts>` */
+    Contexts: typeof UIContexts;
     /** Fragment represent a list of render output instead of stuff under one root.
      * Usage example: `<uiDom.Fragment><div/><div/></uiDom.Fragment>` */
     Fragment: typeof UIFragment;
@@ -2188,11 +2203,7 @@ declare const uiDom: {
     /** Create a new UIHost to orchestrate rendering. */
     createHost: (content?: UIRenderOutput, container?: HTMLElement | null | undefined, settings?: UIHostSettingsUpdate | null | undefined) => UIHost;
     /** Create a new context. */
-    createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: Partial<{
-        postActions: Set<string> | null;
-        quickActions: true | Set<string> | null;
-        refreshTimeout: number | null;
-    }> | null | undefined) => UIContext<Data, Actions>;
+    createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: UIContextSettingsUpdate | undefined) => UIContext<Data, Actions>;
     /** Create multiple named contexts. (Useful for tunneling.) */
     createContexts: <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts]: Contexts[Name_2]["data"]; }>(contextsData: AllData) => Contexts;
     /** Create ref. */
@@ -2204,6 +2215,7 @@ declare const uiDom: {
         new (_props?: Props | null | undefined): {};
         render: UISpreadFunction<Props>;
         unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null;
+        UI_DOM_TYPE: string;
         unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[], keyScope: any): UIDefTarget | null;
     };
     /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own keyScope). */
@@ -2211,6 +2223,7 @@ declare const uiDom: {
         new (_props?: Props | null | undefined): {};
         render: UISpreadFunction<Props>;
         unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null;
+        UI_DOM_TYPE: string;
         unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[], keyScope: any): UIDefTarget | null;
     };
     /** Create a LiveFunction omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
@@ -2289,4 +2302,4 @@ declare const uiDom: {
     range: (lengthOrStart: number, end?: number | undefined, stepSize?: number) => number[];
 };
 
-export { CSSProperties, ClassType, Dictionary, DomElement, GroundedTreeNode, GroundedTreeNodeBoundary, GroundedTreeNodeContext, GroundedTreeNodeDom, GroundedTreeNodeEmpty, GroundedTreeNodeHost, GroundedTreeNodePass, GroundedTreeNodePortal, GroundedTreeNodeRoot, GroundedTreeNodeType, HTMLAttributes, HTMLAttributesAll, HTMLAttributesWithStyle, HTMLElementType, HTMLListenerAttributeNames, HTMLListenerAttributes, HTMLListenerAttributesAll, HTMLTags, NameValidator, NestedPaths, NestedPathsBy, NonDictionary, NullLike, PropType, RecordableType, RenderTextContentCallback, RenderTextTag, RenderTextTagCallback, SafeIteratorDepth, SafeIteratorDepthDefault, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBoundaryTag, UIChangeInfos, UICloneNodeBehaviour, UIComponent, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContext, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIEffectType, UIElement, UIElementType, UIFragment, UIFragmentType, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHTMLPostProps, UIHTMLProps, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UIHostType, UILive, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveType, UILiveUpdates, UIMini, UIMiniFunction, UIMiniMixin, UIMiniType, UIPortal, UIPortalType, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRefType, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UISpreadType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, ValidateNames, createContext, createContexts, createHost, createLive, createMini, createSpread, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };
+export { CSSProperties, ClassType, Dictionary, DomElement, GroundedTreeNode, GroundedTreeNodeBoundary, GroundedTreeNodeContexts, GroundedTreeNodeDom, GroundedTreeNodeEmpty, GroundedTreeNodeHost, GroundedTreeNodePass, GroundedTreeNodePortal, GroundedTreeNodeRoot, GroundedTreeNodeType, HTMLAttributes, HTMLAttributesAll, HTMLAttributesWithStyle, HTMLElementType, HTMLListenerAttributeNames, HTMLListenerAttributes, HTMLListenerAttributesAll, HTMLTags, NameValidator, NestedPaths, NestedPathsBy, NonDictionary, NullLike, PropType, RecordableType, RenderTextContentCallback, RenderTextTag, RenderTextTagCallback, SafeIteratorDepth, SafeIteratorDepthDefault, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBoundaryTag, UIChangeInfos, UICloneNodeBehaviour, UIComponent, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIEffectType, UIElement, UIElementType, UIFragment, UIFragmentType, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHTMLPostProps, UIHTMLProps, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UIHostType, UILive, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveType, UILiveUpdates, UIMini, UIMiniFunction, UIMiniMixin, UIMiniType, UIPortal, UIPortalType, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRefType, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UISpreadType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, ValidateNames, createContext, createContexts, createHost, createLive, createMini, createSpread, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };
