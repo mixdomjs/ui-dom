@@ -2,11 +2,11 @@
 
 ### Features
 
-- Supported inserting multiple contexts with one uiDom.Contexts: `<uiDom.Contexts contexts={namedContexts}>...</uiDom.Context>`
+- Supported inserting multiple contexts with a single uiDom.Contexts def: `<uiDom.Contexts cascade={namedContexts}>...</uiDom.Contexts>`
 
 ### Changes
 
-- Removed inserting context by `<uiDom.Context name="themes" context={themesContext}>`. Instead all are inserted by `<uiDom.Contexts contexts={namedContexts}>`.
+- Removed inserting context by `<uiDom.Context name="themes" context={themesContext}>`. Instead all are inserted by `<uiDom.Contexts cascade={namedContexts}>`.
 - In relation to above, changed that UIContext class / mixin does not care for props anymore, and can accept data and settings instead.
 - Changed the def type detection to use UI_DOM_TYPE static member in all cases and added it to the pseudo classes.
 
