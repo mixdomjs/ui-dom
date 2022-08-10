@@ -8,8 +8,9 @@ See docs, examples and more at: [uidomjs.org](https://uidomjs.org)
 
 ## NPM
 
-The npm package can be found at: [ui-dom](https://www.npmjs.com/package/ui-dom)
+The npm package can be found with: [ui-dom](https://www.npmjs.com/package/ui-dom)
 
-## Source
+## GitHub
 
-The source files will be coming soonish - around v1.7.0
+The github project at: [ui-dom](https://github.com/ui-dom/ui-dom.git)
+
