@@ -3,39 +3,39 @@
 // - Imports - //
 
 import {
-    GroundedTreeNode,
+    ClassType,
+    ClassBaseMixer,
+    RecordableType,
+    UITreeNode,
     UIDomRenderInfo,
     UIRenderOutput,
     UIHostSettingsUpdate,
-    RecordableType,
-    GroundedTreeNodeType,
+    UITreeNodeType,
     UIHostSettings,
     UIDefTarget,
-    GroundedTreeNodeDom,
-    GroundedTreeNodeBoundary,
-    ClassType,
+    UITreeNodeDom,
+    UITreeNodeBoundary,
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { _Defs } from "../static/_Defs";
 import { _Apply } from "../static/_Apply";
 import { UISourceBoundary } from "./UIBoundary";
-import { UILive } from "./UILive";
 import { UIHostServices } from "./UIHostServices";
 
 
 // - uiDom.Host - //
 
-export function UIHostMixin(Base: ClassType) {
+function _UIHostMixin(Base: ClassType) {
 
     return class _UIHost extends Base {
 
         public static UI_DOM_TYPE = "Host";
 
         /** This represents abstractly what the final outcome looks like in dom.
-         * .. Each GroundedTreeNode represents a domNode in the final dom.
+         * .. Each UITreeNode represents a domNode in the final dom.
          * .. So if you gNode.domNode.parentNode === gNode.parent?.domNode.
          */
-        public groundedTree: GroundedTreeNode;
+        public groundedTree: UITreeNode;
         public rootBoundary: UISourceBoundary;
         /** The general settings for this uiHost instance.
          * - Do not modify directly, use the .modifySettings method instead.
@@ -79,7 +79,7 @@ export function UIHostMixin(Base: ClassType) {
             const Root = () => this.isDisabled ? null : this.targetDef;
             // Create base tree node for the root boundary.
             const sourceDef = _Defs.newAppliedDefBy({ _uiDefType: "boundary", tag: Root, props: {}, childDefs: [] }, null);
-            const baseTreeNode: GroundedTreeNodeBoundary = {
+            const baseTreeNode: UITreeNodeBoundary = {
                 type: "boundary",
                 def: sourceDef,
                 sourceBoundary: null,
@@ -172,11 +172,11 @@ export function UIHostMixin(Base: ClassType) {
         /** This performs a "refresh-render".
          * .. In case forceDomRead is on will actually read from dom to look for real changes to be done. */
         public refreshRender(forceDomRead: boolean = false, forceRenderTimeout?: number | null) {
-            // Go through the GroundedTreeNode structure and refresh each.
+            // Go through the UITreeNode structure and refresh each.
             const refresh = forceDomRead ? "read" : true;
             const renderInfos: UIDomRenderInfo[] = [];
-            let nextNodes = [...this.groundedTree.children] as GroundedTreeNodeDom[];
-            let treeNode: GroundedTreeNodeDom | undefined;
+            let nextNodes = [...this.groundedTree.children] as UITreeNodeDom[];
+            let treeNode: UITreeNodeDom | undefined;
             let i = 0;
             while (treeNode = nextNodes[i]) {
                 // Next.
@@ -191,7 +191,7 @@ export function UIHostMixin(Base: ClassType) {
                 }
                 // Add to loop.
                 if (treeNode.children[0]) {
-                    nextNodes = treeNode.children.concat(nextNodes.slice(i)) as GroundedTreeNodeDom[];
+                    nextNodes = treeNode.children.concat(nextNodes.slice(i)) as UITreeNodeDom[];
                     i = 0;
                 }
             }
@@ -224,23 +224,23 @@ export function UIHostMixin(Base: ClassType) {
         }
 
         public queryDomElement<T extends Element = Element>(selector: string, allowOverHosts: boolean = false): T | null {
-            return UILive.queryDomElement<T>(this.groundedTree, selector, true, allowOverHosts);
+            return _Apply.queryDomElement<T>(this.groundedTree, selector, true, allowOverHosts);
         }
 
         public queryDomElements<T extends Element = Element>(selector: string, maxCount: number = 0, allowOverHosts: boolean = false): T[] {
-            return UILive.queryDomElements<T>(this.groundedTree, selector, maxCount, true, allowOverHosts);
+            return _Apply.queryDomElements<T>(this.groundedTree, selector, maxCount, true, allowOverHosts);
         }
 
-        public findDomNodes<T extends Node = Node>(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: GroundedTreeNode) => any): T[] {
+        public findDomNodes<T extends Node = Node>(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): T[] {
             return _Apply.findTreeNodesWithin(this.groundedTree, { dom: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.domNode) as T[];
         }
 
-        public findBoundaries(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: GroundedTreeNode) => any): UISourceBoundary[] {
+        public findBoundaries(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] {
             return _Apply.findTreeNodesWithin(this.groundedTree, { boundary: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
         }
 
-        public findTreeNodes(types: RecordableType<GroundedTreeNodeType>, maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: GroundedTreeNode) => any): GroundedTreeNode[] {
-            return _Apply.findTreeNodesWithin(this.groundedTree, _Lib.buildRecordable<GroundedTreeNodeType>(types), maxCount, true, allowOverHosts, validator);
+        public findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
+            return _Apply.findTreeNodesWithin(this.groundedTree, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, true, allowOverHosts, validator);
         }
 
 
@@ -324,9 +324,9 @@ export function UIHostMixin(Base: ClassType) {
 export interface UIHost {
 
     /** This represents abstractly what the final outcome looks like in dom.
-     * .. Each GroundedTreeNode represents a domNode in the final dom.
+     * .. Each UITreeNode represents a domNode in the final dom.
      * .. So if you gNode.domNode.parentNode === gNode.parent?.domNode. */
-    groundedTree: GroundedTreeNode;
+    groundedTree: UITreeNode;
     rootBoundary: UISourceBoundary;
     /** Internal services to keep the whole thing together and synchronized.
      * They are the private internal part of uiHost, so separated into its own class. */
@@ -350,22 +350,21 @@ export interface UIHost {
     getRootDomNodes(inNestedBoundaries?: boolean): Node[];
     queryDomElement<T extends Element = Element>(selector: string, allowOverHosts?: boolean): T | null;
     queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, allowOverHosts?: boolean): T[];
-    findDomNodes<T extends Node = Node>(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: GroundedTreeNode) => any): T[];
-    findBoundaries(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: GroundedTreeNode) => any): UISourceBoundary[];
-    findTreeNodes(types: RecordableType<GroundedTreeNodeType>, maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: GroundedTreeNode) => any): GroundedTreeNode[];
+    findDomNodes<T extends Node = Node>(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
+    findBoundaries(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
+    findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
 
 }
 /** This is the main class to orchestrate and start rendering. */
-export class UIHost extends UIHostMixin(Object) { }
-export type UIHostType = {
-    new (content?: UIRenderOutput, domContainer?: Node | null, settings?: UIHostSettingsUpdate | null): UIHost;
-    readonly UI_DOM_TYPE: "Host";
-    modifySettings(baseSettings: UIHostSettings, updates: UIHostSettingsUpdate): boolean;
-    getDefaultSettings(settings?: UIHostSettingsUpdate | null): UIHostSettings;
-}
+export class UIHost extends _UIHostMixin(Object) { }
 
 export const createHost = (
     content?: UIRenderOutput,
     container?: HTMLElement | null,
     settings?: UIHostSettingsUpdate | null,
 ) => new UIHost(content, container, settings);
+
+/** Call this to give basic UIHost features.
+ * - For example: `class MyMix extends UIHostMixin(MyBase) {}`
+ */
+export const UIHostMixin = _UIHostMixin as ClassBaseMixer<UIHost>;

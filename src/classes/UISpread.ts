@@ -33,8 +33,9 @@ export class UISpread<Props extends Dictionary = {}> {
             let thisDef = info[0];
             const pDef = info[1];
             // Handle children dependent.
-            if (thisDef._uiDefType === "fragment" && thisDef.props && thisDef.props.needsChildren) {
-                const { props, ...newDef } = thisDef;
+            if (thisDef._uiDefType === "fragment" && thisDef.withContent) {
+                const newDef = { ...thisDef };
+                delete newDef.withContent; // We already handled it here on the static def side - must not be handled again.
                 if (!contents.length)
                     newDef.childDefs = [];
                 pDef ? pDef.childDefs[pDef.childDefs.indexOf(thisDef)] = newDef : targetDef = newDef;
@@ -100,17 +101,6 @@ export class UISpread<Props extends Dictionary = {}> {
 }
 /** UISpread is a totally static functionality. */
 export interface UISpread {}
-export type UISpreadType<Props extends Dictionary = {}> = {
-    readonly UI_DOM_TYPE: "Spread";
-	new (_props?: Props | null): UISpread<Props>;
-    /** The renderer function to spread out the contents. */
-    render: UISpreadFunction;
-    /** The function to unfold the contents. Will be overridden by createSpread procedure. */
-    unfold(_props: Dictionary, _childDefs: UIDefTarget[]): UIDefTarget | null;
-    /** The universal method to unfold the spread. (The others are static too but based on an extending class.)
-     * The contents are the cleaned childDefs that should replace any content pass. */
-    unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[], keyScope: any): UIDefTarget | null;
-}
 export const createSpread = <Props extends Dictionary = {}>(func: UISpreadFunction<Props>) => class _UISpread extends UISpread<Props> {
     static render = func;
     /** The unfold method unique to this particular UISpread extended class. */

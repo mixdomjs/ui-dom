@@ -4,15 +4,15 @@
 import {
     DomElement,
     HTMLListenerAttributeNames,
-    GroundedTreeNode,
-    GroundedTreeNodeDom,
+    UITreeNode,
+    UITreeNodeDom,
+    UITreeNodeType,
     UIHTMLDiffs,
     UIHTMLPostProps,
     UIHostSettings,
     UIContentValue,
     UIDomRenderInfo,
     UIDomTag,
-    GroundedTreeNodeType,
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { UIRef } from "./UIRef";
@@ -51,7 +51,7 @@ export class UIRender {
         this.externalElements = new Set();
     }
 
-    getApprovedNode(newEl: Node, treeNode: GroundedTreeNodeDom): Node | null {
+    getApprovedNode(newEl: Node, treeNode: UITreeNodeDom): Node | null {
         let el : Node | null = newEl;
         const behaviour = treeNode.def.domCloneMode != null ? treeNode.def.domCloneMode : this.settings.duplicateDomNodeBehaviour;
         if (behaviour === "always" || this.externalElements.has(newEl)) {
@@ -66,7 +66,7 @@ export class UIRender {
         return el;
     }
 
-    createDomNodeBy(treeNode: GroundedTreeNodeDom): Node | null {
+    createDomNodeBy(treeNode: UITreeNodeDom): Node | null {
         // Invalid.
         const origTag = treeNode.def.tag;
         if (typeof origTag !== "string")
@@ -193,7 +193,7 @@ export class UIRender {
 
             // Refresh.
             if (renderInfo.refresh && treeNode.domNode && treeNode["domProps"]) {
-                (treeNode as GroundedTreeNodeDom).domProps = renderInfo.refresh === "read" ? UIRender.readFromDom(treeNode.domNode) : {};
+                (treeNode as UITreeNodeDom).domProps = renderInfo.refresh === "read" ? UIRender.readFromDom(treeNode.domNode) : {};
                 doUpdate = true;
             }
 
@@ -263,7 +263,7 @@ export class UIRender {
 
                     // For Q.Element, the swapping is more thorough.
                     if (treeNode.type === "dom") {
-                        const tNode = treeNode as GroundedTreeNodeDom;
+                        const tNode = treeNode as UITreeNodeDom;
                         const oldParent = oldEl && oldEl.parentNode;
                         if (newEl) {
                             newEl = this.getApprovedNode(newEl, tNode);
@@ -485,11 +485,11 @@ export class UIRender {
     // - Static - //
 
     static IGNORE_PROPS = { innerHTML: true, textContent: true }
-    static PASSING_TYPES: Partial<Record<GroundedTreeNodeType, true>> = { boundary: true, pass: true, contexts: true, host: true };
+    static PASSING_TYPES: Partial<Record<UITreeNodeType, true>> = { boundary: true, pass: true, contexts: true, host: true };
     static LISTENER_PROPS = [
     "Abort","AnimationCancel","AnimationEnd","AnimationIteration","AnimationStart","AuxClick","Blur","CanPlay","CanPlayThrough","Change","Click","Close","ContextMenu","CueChange","DblClick","Drag","DragEnd","DragEnter","DragLeave","DragOver","DragStart","Drop","DurationChange","Emptied","Ended","Error","Focus","GotPointerCapture","Input","Invalid","KeyDown","KeyPress","KeyUp","Load","LoadedData","LoadedMetaData","LoadStart","LostPointerCapture","MouseDown","MouseEnter","MouseLeave","MouseMove","MouseOut","MouseOver","MouseUp","Pause","Play","Playing","PointerCancel","PointerDown","PointerEnter","PointerLeave","PointerMove","PointerOut","PointerOver","PointerUp","Progress","RateChange","Reset","Resize","Scroll","SecurityPolicyViolation","Seeked","Seeking","Select","Stalled","Submit","Suspend","TimeUpdate","Toggle","TouchCancel","TouchEnd","TouchMove","TouchStart","TransitionCancel","TransitionEnd","TransitionRun","TransitionStart","VolumeChange","Waiting","Wheel"].reduce((acc,curr) => (acc["on" + curr]=curr.toLowerCase(),acc), {}) as Record<HTMLListenerAttributeNames, (e: Event) => void>;
 
-    static findInsertionNodes(treeNode: GroundedTreeNode): [ Node, Node | null ] | [ null, null ] {
+    static findInsertionNodes(treeNode: UITreeNode): [ Node, Node | null ] | [ null, null ] {
 
         // Situation example:
         //
@@ -569,7 +569,7 @@ export class UIRender {
         // 2. Find sibling.
         let domSibling: Node | null = null;
         // Loop up.
-        let tNode: GroundedTreeNode | null = treeNode;
+        let tNode: UITreeNode | null = treeNode;
         while (tNode) {
             // Get parent.
             tParentNode = tNode.parent;
@@ -577,7 +577,7 @@ export class UIRender {
                 break;
             let iNext = tParentNode.children.indexOf(tNode) + 1;
             // Look for domNode in next siblings.
-            let nextNode: GroundedTreeNode | undefined;
+            let nextNode: UITreeNode | undefined;
             while (nextNode = tParentNode.children[iNext]) {
                 // Found.
                 if (nextNode.domNode && nextNode.type !== "portal") {
@@ -604,11 +604,11 @@ export class UIRender {
      * - This information is essential (and as minimal as possible) to know where to insert new domNodes in a performant manner. (See above findInsertionNodes().)
      * - Note that if the whole boundary unmounts, this is not called. Instead the one that was "moved" to be the first one is called to replace this.
      *   .. In dom sense, we can skip these "would move to the same point" before actual dom moving, but renderInfos should be created - as they are automatically by the basic flow. */
-    static updateDomChainBy(fromTreeNode: GroundedTreeNode, domNode: Node | null, fromSelf: boolean = false) {
+    static updateDomChainBy(fromTreeNode: UITreeNode, domNode: Node | null, fromSelf: boolean = false) {
         // Note, in the simple case that we have a domNode, the next sibling part is simply skipped. See the logic above in findInsertionNodes.
         // Prepare.
-        let tNode: GroundedTreeNode | null = fromTreeNode;
-        let tParent: GroundedTreeNode | null = fromSelf ? fromTreeNode : fromTreeNode.parent;
+        let tNode: UITreeNode | null = fromTreeNode;
+        let tParent: UITreeNode | null = fromSelf ? fromTreeNode : fromTreeNode.parent;
         let newDomNode: Node | null = domNode;
         // Go up level by level until we're not the first child.
         while (tParent) {
@@ -621,7 +621,7 @@ export class UIRender {
                 // Check in next siblings if finds a domNode.
                 // .. Note that if tParent === tNode (<-- fromSelf = true), this works to give us the desired index 0.
                 let iNext = tParent.children.indexOf(tNode) + 1;
-                let nextNode: GroundedTreeNode | undefined;
+                let nextNode: UITreeNode | undefined;
                 while (nextNode = tParent.children[iNext]) {
                     // Found.
                     if (nextNode.domNode && nextNode.type !== "portal") {
@@ -673,7 +673,7 @@ export class UIRender {
     // <-- Unused.
 
     /** Apply properties to dom elements for the given treeNode. */
-    static domApplyProps(treeNode: GroundedTreeNodeDom, logWarnings: boolean = false): UIHTMLDiffs & { appliedProps: UIHTMLPostProps } {
+    static domApplyProps(treeNode: UITreeNodeDom, logWarnings: boolean = false): UIHTMLDiffs & { appliedProps: UIHTMLPostProps } {
         // Parse.
         const domElement = treeNode.domNode as DomElement | null;
         const nextProps = treeNode.def.props || {};

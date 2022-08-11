@@ -2,19 +2,26 @@
 
 // - Imports - //
 
-import { GroundedTreeNode, UIHTMLDiffs, UIContentSimple, ClassType } from "../static/_Types";
+import {
+    UITreeNode,
+    UIHTMLDiffs,
+    UIContentSimple,
+    ClassType,
+    ClassBaseMixer
+} from "../static/_Types";
+import { _Apply } from "../static/_Apply";
 import { UIContentBoundary, UISourceBoundary } from "./UIBoundary";
 
 
 // - UIRef - //
 
-export function UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBoundary>(Base: ClassType) {
+function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBoundary>(Base: ClassType) {
 
     return class _UIRef extends Base {
 
         public static UI_DOM_TYPE = "Ref";
 
-        public attachedTo: Set<GroundedTreeNode>;
+        public attachedTo: Set<UITreeNode>;
 
         constructor(...args: any[]) {
             super(...args);
@@ -27,10 +34,10 @@ export function UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourc
         /** This gets the last reffed treeNode.
          * - It works as if the behaviour was to always override with the last one.
          * - Except that if the last one is removed, falls back to earlier existing. */
-        public getTreeNode(): GroundedTreeNode | null {
+        public getTreeNode(): UITreeNode | null {
             return [...this.attachedTo][this.attachedTo.size - 1] || null;
         }
-        public getTreeNodes(): GroundedTreeNode[] {
+        public getTreeNodes(): UITreeNode[] {
             return [...this.attachedTo];
         }
         public getDomNode(onlyForDomRefs: boolean = false): Type & Node | null {
@@ -44,10 +51,15 @@ export function UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourc
             return null;
         }
         public getDomNodes(onlyForDomRefs: boolean = false): Array<Type & Node> {
-            const nodes: Array<Type & Node> = [];
-            for (const treeNode of this.attachedTo)
-                if (treeNode.domNode && (!onlyForDomRefs || treeNode.type === "dom"))
+            let nodes: Array<Type & Node> = [];
+            for (const treeNode of this.attachedTo) {
+                if (!treeNode.domNode)
+                    continue;
+                if (treeNode.type === "dom")
                     nodes.push(treeNode.domNode as (Type & Node));
+                else if (!onlyForDomRefs)
+                    nodes = nodes.concat(_Apply.getTreeNodesForDomRootsUnder(treeNode, true).map(tNode => tNode.domNode as (Type & Node)));
+            }
             return nodes;
         }
         public getRefBoundary(): Type & UISourceBoundary | null {
@@ -66,7 +78,7 @@ export function UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourc
         // - Static managers - //
 
         // Override.
-        static didAttachOn(ref: UIRef, treeNode: GroundedTreeNode) {
+        static didAttachOn(ref: UIRef, treeNode: UITreeNode) {
             // Already mounted.
             if (ref.attachedTo.has(treeNode))
                 return;
@@ -84,7 +96,7 @@ export function UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourc
         }
 
         // Override.
-        static willDetachFrom(ref: UIRef, treeNode: GroundedTreeNode) {
+        static willDetachFrom(ref: UIRef, treeNode: UITreeNode) {
             // Call, if was mounted.
             if (ref.attachedTo.has(treeNode)) {
                 if (treeNode.type === "dom") {
@@ -105,15 +117,15 @@ export interface UIRef<Type extends Node | UISourceBoundary = Node | UISourceBou
 
     /** The collection (for clarity) of tree nodes where is attached to.
      * It's not needed internally but might be useful for custom needs. */
-    attachedTo: Set<GroundedTreeNode>;
+    attachedTo: Set<UITreeNode>;
 
     // - Getters - //
 
     /** This gets the last reffed treeNode.
      * - It works as if the behaviour was to always override with the last one.
      * - Except that if the last one is removed, falls back to earlier existing. */
-    getTreeNode(): GroundedTreeNode | null;
-    getTreeNodes(): GroundedTreeNode[];
+    getTreeNode(): UITreeNode | null;
+    getTreeNodes(): UITreeNode[];
     getDomNode(onlyForDomRefs?: boolean): Type & Node | null;
     getDomNodes(onlyForDomRefs?: boolean): Array<Type & Node>;
     getRefBoundary(): Type & UISourceBoundary | null;
@@ -140,11 +152,13 @@ export interface UIRef<Type extends Node | UISourceBoundary = Node | UISourceBou
     uiWillUnmount?(boundary: Type & UISourceBoundary): void;
 
 }
-export class UIRef<Type extends Node | UISourceBoundary = Node | UISourceBoundary> extends UIRefMixin(Object) {}
-export type UIRefType<Type extends Node | UISourceBoundary = Node | UISourceBoundary> = {
-    new (): UIRef<Type>;
-    readonly UI_DOM_TYPE: "Ref";
-    didAttachOn(ref: UIRef, treeNode: GroundedTreeNode): void;
-    willDetachFrom(ref: UIRef, treeNode: GroundedTreeNode): void;
-}
+export class UIRef<Type extends Node | UISourceBoundary = Node | UISourceBoundary> extends _UIRefMixin(Object) {}
 export const createRef = <Type extends Node | UISourceBoundary = Node | UISourceBoundary>() => new UIRef<Type>();
+
+/** There are two ways you can use this:
+ * 1. Call this to give basic UIRef features.
+ *      * For example: `class MyMix extends UIRefMixin(MyBase) {}`
+ * 2. If you want to define Type, use this simple trick instead:
+ *      * For example: `class MyMix extends (UIRefMixin as ClassBaseMixer<UIRef<MyType>>)(MyBase) {}`
+ */
+export const UIRefMixin = _UIRefMixin as ClassBaseMixer<UIRef>;

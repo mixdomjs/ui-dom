@@ -6,19 +6,22 @@ import { UIContentBoundary, UISourceBoundary } from "../classes/UIBoundary";
 import { UIContentClosure } from "../classes/UIContentClosure";
 import { UIRef } from "../classes/UIRef";
 import { UISpread } from "../classes/UISpread";
-import { UIMini, UIMiniType } from "../classes/UIMini";
-import { UIWired } from "../classes/UIWired";
+import { UIMini } from "../classes/UIMini";
 import { UIHost } from "../classes/UIHost";
-import { UILive, UILiveType } from "../classes/UILive";
+import { UILive } from "../classes/UILive";
 import { UIContext, UIContexts } from "../classes/UIContext";
-import { UIElement, UIFragment, UIFragmentProps, UIFragmentType, UIPortal } from "../classes/UIPseudoClasses";
+import { UIElement, UIFragment, UIPortal } from "../classes/UIPseudoClasses";
+import { UIWired, UIWiredType } from "../classes/UIWired";
 
 
 // - General - //
 
 // Helpers - almost all are related to object-likes: dictionaries / classes.
 export type NullLike = null | undefined; // Equivalent to check: someVar == null.
-export type ClassType<T = Object> = new (...args: any[]) => T;
+export type ClassType<T = Object, Args extends any[] = any[]> = new (...args: Args) => T;
+export type ClassMixer<TExtends extends ClassType> = <TBase extends ClassType>(Base: TBase) => TBase & TExtends;
+export type ClassBaseMixer<TExtends extends object> = <TBase extends ClassType>(Base: TBase) => TBase & ClassType<TExtends>;
+// <TBase extends Constructor, Live extends UILive = UILive>(Base: TBase) => (UILiveMixer as (Base: TBase) => TBase & ClassType<Live>
 export type Dictionary<K extends string = string, V = any> = Record<K, V>;
 export type RecordableType<K extends string> = Partial<Dictionary<K>> | Array<K> | Set<K>; // Iterable<K>;
 export type NonDictionary = Array<any> | Set<any> | Map<any, any>;
@@ -161,13 +164,11 @@ export type UIPreClassName<Valid extends string = string, Single extends string 
 // - Tags - //
 
 export type UIDomTag = keyof HTMLElementTagNameMap | keyof SVGElementTagNameMap;
-// export type UIBoundaryTag = UILiveType | UIWiredType | UIFunction;
-// export type UIPreTag = UIFragmentType | UIContextType | UIElementType | UIPortalType | UIDomTag | UIBoundaryTag;
-export type UIBoundaryTag = ClassType<UILive> | ClassType<UIWired> | UIFunction;
-export type UIPreTag = ClassType<UIFragment> | ClassType<UIContexts> | ClassType<UIElement> | ClassType<UIPortal> | UIDomTag | UIBoundaryTag;
+export type UIBoundaryTag = typeof UILive | typeof UIWired | UIFunction;
+export type UIPreTag = typeof UIFragment | typeof UIContexts | typeof UIElement | typeof UIPortal | UIDomTag | UIBoundaryTag;
 export type UIPostTag = "" | "_" | UIDomTag | UIBoundaryTag | null;
 /** This tag conversion is used for internal tag based def mapping. The UIDefTarget is the uiDom.ContentPass. */
-export type UIDefKeyTag = UIPostTag | UIDefTarget | UIFragmentType | UIHost;
+export type UIDefKeyTag = UIPostTag | UIDefTarget | typeof UIFragment | UIHost;
 
 
 // - Component & Boundary - //
@@ -182,11 +183,11 @@ export type UIBoundableFunction<Props = {}> = UILiveFunction<Props> | UIMiniFunc
 /** This is a shortcut for UIDom renderers that will be have their own boundary:
  * - Either based on UILive class/mixin, or
  * - Is a function: UILiveFunction | UIMiniFunction. */
-export type UIBoundable<Props = {}> = UILiveType<Props> | UIMiniType<Props> | UIBoundableFunction<Props>;
+export type UIBoundable<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | UIBoundableFunction<Props>;
 /** This is a shortcut for all valid UIDom renderers:
- * - Either based on UILive class/mixin (including UISpreadType), or
+ * - Either based on UILive class/mixin (including UISpread), or UIMini (including UIWired), or
  * - Is a function: UILiveFunction | UIMiniFunction | UISpreadFunction (before conversion). */
-export type UIComponent<Props = {}> = UILiveType<Props> | UIBoundableFunction<Props> | ClassType<UISpread<Props>>;
+export type UIComponent<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | UIWiredType<Props> | typeof UISpread<Props> | UIBoundableFunction<Props>;
 
 export type UIBoundary = UISourceBoundary | UIContentBoundary;
 export type UISourceBoundaryId = string;
@@ -243,7 +244,7 @@ export enum UIContextAttach {
     Cascading = 1 << 0,
     /** The contexts attached by the parent using the `contexts` prop. */
     Parent = 1 << 1,
-    /** The contexts manually overridden by `q.overrideContext()` or alike. */
+    /** The contexts manually overridden by `live.overrideContext()` or alike. */
     Overridden = 1 << 2,
     // Shortcuts.
     /** Shortcut for all types. */
@@ -332,7 +333,6 @@ export interface UIHTMLDiffs {
 
 // - Change & render infos - //
 
-// export type DomRenderAction = "create" | "update" | "content" | "move" | "remove" | "refresh" | "refresh-dom";
 /** This info is used for executing rendering changes to dom for a given appliedDef (which is modified during the process).
  * - If props is given it modifies the class, style and attributes of the element. This modifies the .domProps in the appliedDef.
  * - If create info is provided, creates a new dom element.
@@ -341,7 +341,7 @@ export interface UIHTMLDiffs {
  * - If destroy is provided, removes the element from dom and from appliedDef.domElement.
  */
 interface UIDomRenderInfoBase {
-    treeNode: GroundedTreeNode;
+    treeNode: UITreeNode;
     remove?: boolean;
     create?: boolean;
     move?: boolean;
@@ -352,7 +352,7 @@ interface UIDomRenderInfoBase {
     refresh?: boolean | "read";
 }
 interface UIDomRenderInfoBoundary extends UIDomRenderInfoBase {
-    treeNode: GroundedTreeNodeBoundary | GroundedTreeNodePass;
+    treeNode: UITreeNodeBoundary | UITreeNodePass;
     remove?: true;
     create?: false;
     update?: false;
@@ -361,7 +361,7 @@ interface UIDomRenderInfoBoundary extends UIDomRenderInfoBase {
     swap?: false;
 }
 interface UIDomRenderInfoDomLike extends UIDomRenderInfoBase {
-    treeNode: GroundedTreeNodeDom | GroundedTreeNodePortal;
+    treeNode: UITreeNodeDom | UITreeNodePortal;
     swap?: boolean;
     remove?: true;
     create?: true;
@@ -370,7 +370,7 @@ interface UIDomRenderInfoDomLike extends UIDomRenderInfoBase {
     content?: true;
 }
 interface UIDomRenderInfoUIDom extends UIDomRenderInfoBase {
-    treeNode: GroundedTreeNodeHost;
+    treeNode: UITreeNodeHost;
     remove?: boolean;
     create?: boolean;
     move?: boolean;
@@ -436,7 +436,7 @@ interface UIDefBase<Props extends UIGenericPostProps = UIGenericPostProps> {
     host?: UIHost;
 
     // Other.
-    treeNode?: GroundedTreeNode;
+    treeNode?: UITreeNode;
 
 }
 export interface UIDefDom<Props extends UIGenericPostProps = UIGenericPostProps> extends UIDefBase<Props> {
@@ -477,9 +477,10 @@ export interface UIDefBoundary<Props extends UIGenericPostProps = UIGenericPostP
     tag: UIBoundaryTag;
     props: Props;
 }
-export interface UIDefFragment extends UIDefBase<UIFragmentProps> {
+export interface UIDefFragment extends UIDefBase {
     _uiDefType: "fragment";
     tag: null;
+    withContent?: boolean;
     isArray?: boolean;
 }
 export interface UIDefPass extends UIDefBase {
@@ -506,7 +507,7 @@ export type UIDefTypesAll = UIDefDom | UIDefContent | UIDefContentInner | UIDefE
 export interface UIDefAppliedBase extends UIDefBase {
     childDefs: UIDefApplied[];
     action: "mounted" | "moved" | "updated";
-    treeNode?: GroundedTreeNode;
+    treeNode?: UITreeNode;
 }
 export interface UIDefTargetBase extends UIDefBase {
     childDefs: UIDefTarget[];
@@ -520,20 +521,20 @@ export type UIDefTarget = UIDefTargetBase & UIDefTypesAll;
 
 
 // - Grounded tree - //
-export type GroundedTreeNodeType = "dom" | "portal" | "boundary" | "pass" | "contexts" | "host" | "root";
-interface GroundedTreeNodeBase {
+export type UITreeNodeType = "dom" | "portal" | "boundary" | "pass" | "contexts" | "host" | "root";
+interface UITreeNodeBase {
 
     // - Mandatory - //
 
     /** The main type of the treeNode that defines how it should behave and what it contains.
      * The type "" is only used temporarily - it can only end up in treeNodes if there's an error. */
-    type: GroundedTreeNodeType | "";
+    type: UITreeNodeType | "";
     /** Normally, only the root has no parent, but all others do.
      * However, if we are talking about a treeNode that is no longer in the tree (= a dead branch),
      * .. then the parent is null, or one of the parents in the chain is null even though it's not a real root node. */
-    parent: GroundedTreeNode | null;
+    parent: UITreeNode | null;
     /** The treeNodes inside - for navigation. */
-    children: GroundedTreeNode[];
+    children: UITreeNode[];
     /** Every treeNode has a domNode reference.
      * For boundaries, the domNode (and domProps) are updated flows up on create / remove / move until meets a dom tag parent. */
     domNode: DomElement | Node | null;
@@ -548,17 +549,17 @@ interface GroundedTreeNodeBase {
     def?: UIDefApplied;
 
 };
-interface GroundedTreeNodeBaseWithDef extends GroundedTreeNodeBase {
+interface UITreeNodeBaseWithDef extends UITreeNodeBase {
     def: UIDefApplied;
 }
-export interface GroundedTreeNodeEmpty extends GroundedTreeNodeBase {
+export interface UITreeNodeEmpty extends UITreeNodeBase {
     type: "";
 };
-export interface GroundedTreeNodeRoot extends GroundedTreeNodeBase {
+export interface UITreeNodeRoot extends UITreeNodeBase {
     type: "root";
     def?: never;
 };
-export interface GroundedTreeNodeDom extends GroundedTreeNodeBaseWithDef {
+export interface UITreeNodeDom extends UITreeNodeBaseWithDef {
     type: "dom";
     /** This exists only for treeNodes referring to dom elements (typeof appliedDef.tag === "string").
      * To avoid ever missing diffs, it's best to hold a memory for the props that were actually applied to a dom element.
@@ -567,29 +568,29 @@ export interface GroundedTreeNodeDom extends GroundedTreeNodeBaseWithDef {
      *   2. It's actually better for outside purposes that we only take care of our own changes to dom - not forcing things there (except create / destroy our own). */
     domProps: UIHTMLPostProps;
 };
-export interface GroundedTreeNodePortal extends GroundedTreeNodeBaseWithDef {
+export interface UITreeNodePortal extends UITreeNodeBaseWithDef {
     type: "portal";
     /** For portals, the domNode refers to the external container. */
-    domNode: GroundedTreeNodeBase["domNode"];
+    domNode: UITreeNodeBase["domNode"];
 };
-export interface GroundedTreeNodeContexts extends GroundedTreeNodeBaseWithDef {
+export interface UITreeNodeContexts extends UITreeNodeBaseWithDef {
     type: "contexts";
 };
-export interface GroundedTreeNodeBoundary extends GroundedTreeNodeBaseWithDef {
+export interface UITreeNodeBoundary extends UITreeNodeBaseWithDef {
     type: "boundary";
     /** This will be set to the treeNode right after instancing the source boundary. */
     boundary: UISourceBoundary;
 };
-export interface GroundedTreeNodePass extends GroundedTreeNodeBaseWithDef {
+export interface UITreeNodePass extends UITreeNodeBaseWithDef {
     type: "pass";
     /** This will be set to the treeNode right after instancing the content boundary.
      * - It's null only if there's no content, otherwise there's a content boundary.*/
     boundary: UIContentBoundary | null;
 };
-export interface GroundedTreeNodeHost extends GroundedTreeNodeBaseWithDef {
+export interface UITreeNodeHost extends UITreeNodeBaseWithDef {
     type: "host";
 };
-export type GroundedTreeNode = GroundedTreeNodeEmpty | GroundedTreeNodeDom | GroundedTreeNodePortal | GroundedTreeNodeContexts | GroundedTreeNodeBoundary | GroundedTreeNodePass | GroundedTreeNodeHost | GroundedTreeNodeRoot;
+export type UITreeNode = UITreeNodeEmpty | UITreeNodeDom | UITreeNodePortal | UITreeNodeContexts | UITreeNodeBoundary | UITreeNodePass | UITreeNodeHost | UITreeNodeRoot;
 
 
 interface UIDefPseudo {
@@ -758,7 +759,7 @@ export interface UIHostSettings {
      * - The detection is uiHost based and simply based on whether the element to create was already grounded or not. */
     duplicateDomNodeBehaviour: UICloneNodeBehaviour | "";
     /** Custom handler for the duplicateDomNode behaviour. */
-    duplicateDomNodeHandler: ((domElement: Node, treeNode: GroundedTreeNodeDom) => Node | null) | null;
+    duplicateDomNodeHandler: ((domElement: Node, treeNode: UITreeNodeDom) => Node | null) | null;
 
 }
 

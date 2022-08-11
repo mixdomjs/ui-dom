@@ -3,7 +3,7 @@
 // - Imports - //
 
 import {
-    GroundedTreeNode,
+    UITreeNode,
     UIBoundary,
     UIChangeInfos,
     UIContentEnvelope,
@@ -23,7 +23,7 @@ export class UIContentClosure {
     sourceBoundary: UISourceBoundary | null;
     envelope: UIContentEnvelope | null;
     truePassDef: UIDefApplied | null;
-    groundedDefsMap: Map<UIDefApplied, [UISourceBoundary | UIContentBoundary, GroundedTreeNode, any]>;
+    groundedDefsMap: Map<UIDefApplied, [UISourceBoundary | UIContentBoundary, UITreeNode, any]>;
     pendingDefs: Set<UIDefApplied>;
 
     constructor(thruBoundary: UISourceBoundary, sourceBoundary?: UISourceBoundary | null) {
@@ -37,7 +37,7 @@ export class UIContentClosure {
 
     // If was grounded for the first time, updates the internals and returns render infos and boundary updates for the content.
     // .. If was grounded already returns [] for infos.
-    contentGrounded(groundingDef: UIDefApplied, gBoundary: UISourceBoundary | UIContentBoundary, treeNode: GroundedTreeNode, copyKey?: any): UIChangeInfos {
+    contentGrounded(groundingDef: UIDefApplied, gBoundary: UISourceBoundary | UIContentBoundary, treeNode: UITreeNode, copyKey?: any): UIChangeInfos {
 
         // Note that we don't collect listener boundaries.
         // .. Instead it's handled by downward flow (as content is rarely passed super far away).

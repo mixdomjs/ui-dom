@@ -16,9 +16,9 @@ import { uiContent } from "../uiDom";
 
 // - UIWired - //
 
-export class UIWired<BaseProps = {}> extends UIMini<BaseProps> {
+export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps> {
 
-    static UI_DOM_TYPE = "Wired";
+    public static UI_DOM_TYPE = "Wired";
 
     public static instanced: Set<UISourceBoundary>;
     public static source: UIComponent;
@@ -49,6 +49,11 @@ export class UIWired<BaseProps = {}> extends UIMini<BaseProps> {
     render(): UIRenderOutput { return uiContent; }
 
 }
+//
+// <-- Should this be a mixin too..?
+// ... Seems to cause some typing problems though, due to heavy use of static.
+
+/** The static class type for UIWired that is extended when creates a wired source. */
 export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps> = {
 
     // Constructor.
@@ -96,7 +101,7 @@ export const createWired = <
     Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps
 >(funcOrClass: UIComponent<MixedProps>, builderOrProps?: Builder | WiredProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer> => class Wired extends UIWired<BaseProps> {
 
-    public static readonly UI_DOM_TYPE: "Wired";
+    public static UI_DOM_TYPE = "Wired" as const;
 
     // Prepare static side.
     /** The instanced boundaries. The Wired class instance will be found as: boundary.miniApi. */

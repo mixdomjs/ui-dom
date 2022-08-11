@@ -3,7 +3,6 @@
 // - Imports - //
 
 import {
-    GroundedTreeNode,
     UIActions,
     UIQuestion,
     UIQuestionary,
@@ -87,18 +86,15 @@ export class UIContextServices {
         this.runAction(que, null, true, maxCount);
     }
 
+    /** Refresh the context. Uses the default timing unless specified. */
     public refresh(defaultTimeout: number | null, forceTimeout?: number | null): void {
         this.refreshTimer = _Apply.refreshWithTimeout(this, this.refreshNow, this.refreshTimer, defaultTimeout, forceTimeout);
     }
 
-    /** The context doesn't keep track of interests due to keeping bookkeeping procedures simple.
-      * - So instead, on context data change:
-      *   1. We go each of our treeNodes to find the boundaries.
-      *   2. And for each boundary, we start going down very quickly using .innerBoundaries and .outerContexts that also can cut our way.
-      *   3. Finally, if finds any interested ones, calls uiHost.services.addToUpdates on them.
-      * - Note that this method should not be called during the update process, because it depends on .innerBoundaries and .outerContexts that are updated then.
-      * - Note that in the case some roots are nested, there might be double checking - but it's a very small price to pay for a rare case. */
-    public refreshNow(): void {
+    /** This refreshes the context immediately.
+     * - This is assumed to be called only by the .refresh function above.
+     * - So it will mark the timer as cleared, without using window.clearTimeout for it. */
+    private refreshNow(): void {
         // Get and clear.
         let refreshActions = this.refreshActions;
         let refreshPostActions = this.refreshPostActions;
@@ -382,16 +378,6 @@ export class UIContextServices {
     }
 
     // - Static helpers - //
-
-    public static getHostsFromTreeNodes(treeNodes: Iterable<GroundedTreeNode>): Set<UIHost> {
-        const hosts: Set<UIHost> = new Set();
-        for (const treeNode of treeNodes) {
-            const sBoundary = treeNode.sourceBoundary;
-            if (sBoundary)
-                hosts.add(sBoundary.uiHost);
-            }
-        return hosts;
-    }
 
     public static sortCollection(collection: Map<UILiveSource, Set<string>>): Map<UILiveSource, Set<string>> {
         // Sort.

@@ -4,13 +4,13 @@
 import { _Lib } from "./_Lib";
 import {
     Dictionary,
-    GroundedTreeNode,
-    GroundedTreeNodeDom,
-    GroundedTreeNodeBoundary,
-    GroundedTreeNodeHost,
-    GroundedTreeNodeContexts,
-    GroundedTreeNodePortal,
-    GroundedTreeNodeType,
+    UITreeNode,
+    UITreeNodeDom,
+    UITreeNodeBoundary,
+    UITreeNodeHost,
+    UITreeNodeContexts,
+    UITreeNodePortal,
+    UITreeNodeType,
     UIDefKeyTag,
     UIDefTarget,
     UIDefApplied,
@@ -27,6 +27,7 @@ import {
     UIBoundary,
     UIHostSettings,
     UIContextRefresh,
+    RecordableType,
 } from "./_Types";
 import { _Defs } from "./_Defs";
 import { uiContent } from "../uiDom";
@@ -41,7 +42,7 @@ import { UIContext } from "../classes/UIContext";
 // - Methods - //
 
 type OuterContexts = Record<string, UIContext | null>;
-type ToApplyPair = [UIDefTarget, UIDefApplied, GroundedTreeNode, OuterContexts];
+type ToApplyPair = [UIDefTarget, UIDefApplied, UITreeNode, OuterContexts];
 
 export const _Apply = {
 
@@ -52,7 +53,7 @@ export const _Apply = {
         "pass": 3,
         "contexts": 4,
         "host": 5,
-    },
+    }, // as Record<UIDefType, number>,
 
 
     // - Closure update process - //
@@ -168,8 +169,8 @@ export const _Apply = {
      * 3. Go over the preDef tree and assign appliedDef to each targetDef.
      *    - We update our appliedDef tree (half-separately from old appliedDefs) as we go, and try to reuse as much as we can.
      *    - We also create / reuse treeNodes on the go.
-     *    - The finding reusables also includes handling Q.contentPass'es.
-     *      .. For any (generic or keyed) Q.contentPass found, convert them into a contentPassDef and assign the contentClosure given by our hostBoundary to it (if any).
+     *    - The finding reusables also includes handling uiDom.Content's.
+     *      .. For any (generic or keyed) uiDom.Content found, convert them into a contentPassDef and assign the contentClosure given by our hostBoundary to it (if any).
      *      .. Like with normal defs, try to look for a fitting contentPass (from the earlier applied contentPasses) with keys and order.
      *    - As an output, we collect toApplyPairs for the next step below.
      *
@@ -179,7 +180,7 @@ export const _Apply = {
      *    - b) For any domtag def, collect render info (the kids will be in the loop).
      *    - c) For any sub-boundary, apply the def to the sub-boundary (with targetDefs with our appliedDefs attached) collecting its render info.
      *       * .. Note. Kids will not be in the loop - we need not go any further here. (This is pre-handled in toApplyPairs.)
-     *       * .. Note that this will prevent from any Q.contentPass within from being detected in our scope - note that they were already converted to contentClosures above.
+     *       * .. Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to contentClosures above.
      *       * .... This is how it should be, because these contentClosures will not be grounded by us - maybe by the nested boundary, maybe not.
      *    - d) For any contentPassDef, ground them - as they are now in direct contact with the dom tag chain.
      *       * .. This means, triggering the contentClosure found in them (originally created by our host boundary, and might go way back).
@@ -220,12 +221,12 @@ export const _Apply = {
         // Prepare to collect.
         let renderInfos: UIDomRenderInfo[];
         let boundaryChanges: UISourceBoundaryChange[];
-        const emptyMovers: GroundedTreeNode[] = [];
+        const emptyMovers: UITreeNode[] = [];
 
         // Normal case.
         if (preDef) {
 
-            // - 3. Go over the preDef tree and assign appliedDef to each targetDef (including smart assigning for multiple Q.contentPasses). - //
+            // - 3. Go over the preDef tree and assign appliedDef to each targetDef (including smart assigning for multiple uiDom.Contentes). - //
             // .. We collect the new appliedDef tree as we go - as a separate copy from the original.
             // .. We also collect toApplyPairs already for a future phase of the process.
 
@@ -323,7 +324,7 @@ export const _Apply = {
         //    b) For any domtag def, collect render info (the kids will be in the loop).
         //    c) For any sub-boundary, apply the def to the sub-boundary (with targetDefs with our appliedDefs attached) collecting its render info.
         //       .. Note. Kids will not be in the loop - we need not go any further here. (This is pre-handled in toApplyPairs.)
-        //       .. Note that this will prevent from any Q.contentPass within from being detected in our scope - note that they were already converted to contentClosures above.
+        //       .. Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to contentClosures above.
         //       .... This is how it should be, because these contentClosures will not be grounded by us - maybe by the nested boundary, maybe not.
         //    d) For any contentPassDef, ground them - as they are now in direct contact with the dom tag chain.
         //       .. This means, triggering the contentClosure found in them (originally created by our host boundary, and might go way back).
@@ -334,7 +335,7 @@ export const _Apply = {
 
     	// Prepare.
         const sourceBoundary = (byBoundary.uiId ? byBoundary : byBoundary.sourceBoundary) as UISourceBoundary;
-        const movedNodes: GroundedTreeNode[] = [];
+        const movedNodes: UITreeNode[] = [];
         const domPreCheckType = byBoundary.uiHost.settings.preEqualCheckDomProps;
 
         // Clear innerBoundaries and innerPasses, they will be added again below.
@@ -448,7 +449,7 @@ export const _Apply = {
                     if (aDef.domElement !== toDef.domElement) {
                         // Element swap.
                         if (!fullChange)
-                            renderInfos.push({ treeNode: treeNode as GroundedTreeNodeDom, swap: true });
+                            renderInfos.push({ treeNode: treeNode as UITreeNodeDom, swap: true });
                         // Apply.
                         aDef.domElement = toDef.domElement || null;
                     }
@@ -473,7 +474,7 @@ export const _Apply = {
                     if (aDef.domPortal !== toDef.domPortal) {
                         // Portal swap.
                         if (!fullChange)
-                            renderInfos.push({ treeNode: treeNode as GroundedTreeNodePortal, swap: true });
+                            renderInfos.push({ treeNode: treeNode as UITreeNodePortal, swap: true });
                         // Apply.
                         aDef.domPortal = toDef.domPortal || null;
                     }
@@ -490,8 +491,8 @@ export const _Apply = {
                                 const aCtx = aContexts[name];
                                 if (aCtx && aCtx !== (toContexts && toContexts[name] || null)) {
                                     if (aCtx.onRemoveFrom)
-                                        aCtx.onRemoveFrom(treeNode as GroundedTreeNodeContexts);
-                                    aCtx.roots.delete(treeNode as GroundedTreeNodeContexts);
+                                        aCtx.onRemoveFrom(treeNode as UITreeNodeContexts);
+                                    aCtx.roots.delete(treeNode as UITreeNodeContexts);
                                 }
                             }
                         }
@@ -500,8 +501,8 @@ export const _Apply = {
                             const toCtx = toContexts[name];
                             if (toCtx && toCtx !== (aContexts && aContexts[name] || null)) {
                                 if (toCtx.onInsertInto)
-                                    toCtx.onInsertInto(treeNode as GroundedTreeNodeContexts, name);
-                                toCtx.roots.set(treeNode as GroundedTreeNodeContexts, name);
+                                    toCtx.onInsertInto(treeNode as UITreeNodeContexts, name);
+                                toCtx.roots.set(treeNode as UITreeNodeContexts, name);
                             }
                         }
                         // Apply.
@@ -509,7 +510,7 @@ export const _Apply = {
                     }
                     break;
                 }
-                
+
                 // Case: Host.
                 // .. It's non-changing, each has its unique key.
             }
@@ -524,7 +525,7 @@ export const _Apply = {
                     // Create.
                     if (fullChange)
                         renderInfos.push( {
-                            treeNode: treeNode as GroundedTreeNodeDom,
+                            treeNode: treeNode as UITreeNodeDom,
                             create: true,
                         } );
                     // Prop updates to existing dom element.
@@ -535,7 +536,7 @@ export const _Apply = {
                         const update = aDef.tag ? !domPreCheckType || ((domPreCheckType === "contextual") && (contentChanged || move)) || !_Lib.equalDomProps(propsWere || {}, toDef.props || {}) : false;
                         // Add to rendering.
                         if (update || contentChanged || move) {
-                            const info: UIDomRenderInfo = { treeNode: treeNode as GroundedTreeNodeDom };
+                            const info: UIDomRenderInfo = { treeNode: treeNode as UITreeNodeDom };
                             if (update)
                                 info.update = true;
                             if (contentChanged)
@@ -565,7 +566,7 @@ export const _Apply = {
                 case "portal":
                     if (fullChange) {
                         renderInfos.push( {
-                            treeNode: aDef.treeNode as GroundedTreeNodePortal,
+                            treeNode: aDef.treeNode as UITreeNodePortal,
                             create: true,
                         } );
                     }
@@ -580,7 +581,7 @@ export const _Apply = {
                         aDef.host.groundedTree.parent = treeNode;
                         treeNode.children = [ aDef.host.groundedTree ];
                         // Render.
-                        renderInfos.push( { treeNode: treeNode as GroundedTreeNodeHost, move: true } );
+                        renderInfos.push( { treeNode: treeNode as UITreeNodeHost, move: true } );
                         // Outer contexts.
                         if (aDef.host.settings.welcomeContextsUpRoot)
                             aDef.host.services.onContextPass( outerContexts );
@@ -606,7 +607,7 @@ export const _Apply = {
             // Handle source boundary - upon creation or updating.
             // .. For any sub-boundary, apply the def to the sub-boundary (with targetDefs with our appliedDefs attached) collecting its render info.
             // .... Note. Kids will not be in the loop - we need not go any further here. (This is pre-handled in toApplyPairs.)
-            // .... Note that this will prevent from any Q.contentPass within from being detected in our scope - note that they were already converted to contentClosures above.
+            // .... Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to contentClosures above.
             // ...... This is how it should be, because these contentClosures will not be grounded by us - maybe by the nested boundary, maybe not.
             if (treeNode.boundary) {
 
@@ -765,12 +766,12 @@ export const _Apply = {
      * - Reuses, modifies and creates appliedDefs on the go. (Modifies properties: parent, children, treeNode.)
      * - Reuses, modifies and creates treeNodes on the go.
      */
-    pairDefs(byBoundary: UISourceBoundary | UIContentBoundary, preDef: UIDefTarget, newAppliedDef: UIDefApplied, defsByTags: Map<UIDefKeyTag, UIDefApplied[]>, unusedDefs: Set<UIDefApplied>, toCleanUpDefs?: UIDefApplied[], emptyMovers?: GroundedTreeNode[] | null): ToApplyPair[] {
+    pairDefs(byBoundary: UISourceBoundary | UIContentBoundary, preDef: UIDefTarget, newAppliedDef: UIDefApplied, defsByTags: Map<UIDefKeyTag, UIDefApplied[]>, unusedDefs: Set<UIDefApplied>, toCleanUpDefs?: UIDefApplied[], emptyMovers?: UITreeNode[] | null): ToApplyPair[] {
         // Typescript.
-        type DefLoopPair = [UIDefTargetPseudo | UIDefTarget, UIDefAppliedPseudo | UIDefApplied, GroundedTreeNode, OuterContexts, boolean ];
+        type DefLoopPair = [UIDefTargetPseudo | UIDefTarget, UIDefAppliedPseudo | UIDefApplied, UITreeNode, OuterContexts, boolean ];
         // Prepare.
         const settings = byBoundary.uiHost.settings;
-        const toApplyPairs: [UIDefTarget, UIDefApplied, GroundedTreeNode, OuterContexts][] = [];
+        const toApplyPairs: [UIDefTarget, UIDefApplied, UITreeNode, OuterContexts][] = [];
         const sourceBoundary = byBoundary.uiId ? byBoundary as UISourceBoundary : byBoundary.sourceBoundary;
         let defPairs: DefLoopPair[] = [[ { childDefs: [ preDef ] as UIDefTarget[] }, { childDefs: [ newAppliedDef ] as UIDefApplied[] }, byBoundary.baseTreeNode, { ...byBoundary.outerContexts }, false ]];
         let defPair: DefLoopPair | undefined;
@@ -891,7 +892,7 @@ export const _Apply = {
             if (noValuesMode && childDef._uiDefType === "content")
                 skipChild = noValuesMode === true ? !childDef.domContent : noValuesMode.indexOf(childDef.domContent) !== -1;
             // If is a fragment that requires children, skip it if there's no content to be delivered.
-            else if (childDef._uiDefType === "fragment" && childDef.props && childDef.props.needsChildren)
+            else if (childDef._uiDefType === "fragment" && childDef.withContent)
                 skipChild = !sourceBoundary || !sourceBoundary.contentClosure.envelope;
             // Skip.
             if (skipChild) {
@@ -971,7 +972,7 @@ export const _Apply = {
      *   .. This makes it easy for us to know that whenever there's a child, it should have a node. So we can safely create new ones for all in the list (if cannot reuse).
      *   .. Of course, fragments are not actually worth tree nodes, but we use them as placeholders in the flow. (But because of above, we know there will be something to replace them.)
      */
-    assignTreeNodesForChildren(aChilds: UIDefApplied[], workingTreeNode: GroundedTreeNode, nodeIsFragment?: boolean, sourceBoundary?: UISourceBoundary | null, emptyMovers?: GroundedTreeNode[] | null): GroundedTreeNode[] {
+    assignTreeNodesForChildren(aChilds: UIDefApplied[], workingTreeNode: UITreeNode, nodeIsFragment?: boolean, sourceBoundary?: UISourceBoundary | null, emptyMovers?: UITreeNode[] | null): UITreeNode[] {
 
         // A preassumption of using this function is that it's called flowing down the tree structure.
         // .. Due to this, we will always clear the kids of the workingTreeNode, and reassign them afresh below.
@@ -984,10 +985,10 @@ export const _Apply = {
             return [];
 
         // Prepare.
-        const treeNodes: GroundedTreeNode[] = [];
+        const treeNodes: UITreeNode[] = [];
         let iAddPoint = 0;
-        let firstAvailable: GroundedTreeNode | null = null;
-        let pTreeNode: GroundedTreeNode = workingTreeNode;
+        let firstAvailable: UITreeNode | null = null;
+        let pTreeNode: UITreeNode = workingTreeNode;
 
         // Prepare functionality for when is inside a fragment.
         // .. We need to get the parentTreeNode's child position for adding siblings next to it.
@@ -1010,7 +1011,7 @@ export const _Apply = {
         for (let i=0; i<count; i++) {
             // Prepare.
             const aChild = aChilds[i];
-            let myTreeNode: GroundedTreeNode | null = null;
+            let myTreeNode: UITreeNode | null = null;
             // Had an existing treeNode, reuse it.
             if (aChild.treeNode)
                 myTreeNode = aChild.treeNode;
@@ -1031,7 +1032,7 @@ export const _Apply = {
             }
             // Correct type.
             const aType = aChild._uiDefType;
-            const type = aType === "content" || aType === "element" ? "dom" : (aType === "fragment" ? "" : aType as GroundedTreeNode["type"]);
+            const type = aType === "content" || aType === "element" ? "dom" : (aType === "fragment" ? "" : aType as UITreeNode["type"]);
             // No tree node.
             if (!myTreeNode) {
                 // Create.
@@ -1041,7 +1042,7 @@ export const _Apply = {
                     children: [],
                     sourceBoundary: sourceBoundary || null,
                     domNode: null,
-                } as GroundedTreeNode;
+                } as UITreeNode;
                 // Add domProps.
                 if (myTreeNode.type === "dom")
                     myTreeNode.domProps = {};
@@ -1097,15 +1098,15 @@ export const _Apply = {
     },
 
     // We assign treeNodes and their def relations here.
-    assignTreeNodesForPass(contentBoundary: UIContentBoundary): [ToApplyPair[], GroundedTreeNode[], GroundedTreeNode[]] {
+    assignTreeNodesForPass(contentBoundary: UIContentBoundary): [ToApplyPair[], UITreeNode[], UITreeNode[]] {
         // Prepare.
         const appliedDef = contentBoundary._innerDef;
         const sourceBoundary = contentBoundary.sourceBoundary;
         const targetDef = contentBoundary.targetDef;
-        const toCleanUp: GroundedTreeNode[] = [];
-        const emptyMovers: GroundedTreeNode[] = [];
+        const toCleanUp: UITreeNode[] = [];
+        const emptyMovers: UITreeNode[] = [];
         // Prepare loop.
-        type DefLoopPair = [UIDefTarget, UIDefApplied, GroundedTreeNode | null, OuterContexts, boolean ];
+        type DefLoopPair = [UIDefTarget, UIDefApplied, UITreeNode | null, OuterContexts, boolean ];
         const toApplyPairs: ToApplyPair[] = [];
         let defPairs: DefLoopPair[] = [[ targetDef, appliedDef, contentBoundary.baseTreeNode, { ...contentBoundary.outerContexts }, false ]];
         let defPair: DefLoopPair | undefined;
@@ -1119,7 +1120,7 @@ export const _Apply = {
             // Explore, if has children and is not a boundary def (in that case, our grounding branch ends to it).
             if (toDef.childDefs[0]) {
                 // Get tree nodes for kids.
-                // .. For <Q.Element>'s, we only ground if there's an element defined.
+                // .. For <uiDom.Element>'s, we only ground if there's an element defined.
                 const treeNodes = pTreeNode && toDef._uiDefType !== "boundary" && (toDef._uiDefType !== "element" || toDef.domElement) ?
                     _Apply.assignTreeNodesForChildren(aDefNew.childDefs, pTreeNode, toDefIsFragment, sourceBoundary, emptyMovers) : [];
                 // After clean up.
@@ -1129,7 +1130,7 @@ export const _Apply = {
                     // Add to pre-clean up - they might get reused later, so we just mark sourceBoundary null and collect.
                     // .. If upon final clean up they still have sourceBoundary null, it means they were not used.
                     // .. Note that we must not here do an actual clean up yet - this is because there might be nested true pass content boundaries within us.
-                    const tNode: GroundedTreeNode | undefined = treeNodes[iKid];
+                    const tNode: UITreeNode | undefined = treeNodes[iKid];
                     if (!tNode && aChildDef.treeNode) {
                         toCleanUp.push(aChildDef.treeNode);
                         aChildDef.treeNode.sourceBoundary = null;
@@ -1218,7 +1219,7 @@ export const _Apply = {
                 case "dom":
                 case "element":
                 case "content":
-                    rInfos.push( { treeNode: treeNode as GroundedTreeNodeDom, remove: true });
+                    rInfos.push( { treeNode: treeNode as UITreeNodeDom, remove: true });
                     break;
                 case "boundary":
                     // Note that we must not nullifyDefs.
@@ -1237,15 +1238,15 @@ export const _Apply = {
                         aDef.host.groundedTree.parent = null;
                         treeNode.children = [];
                         // Render.
-                        rInfos.push( { treeNode: treeNode as GroundedTreeNodeHost, move: true });
+                        rInfos.push( { treeNode: treeNode as UITreeNodeHost, move: true });
                     }
                 case "contexts":
                     if (aDef.contexts) {
                         for (const name in aDef.contexts) {
                             const aCtx = aDef.contexts[name];
                             if (aCtx.onRemoveFrom)
-                                aCtx.onRemoveFrom(treeNode as GroundedTreeNodeContexts);
-                            aCtx.roots.delete(treeNode as GroundedTreeNodeContexts);
+                                aCtx.onRemoveFrom(treeNode as UITreeNodeContexts);
+                            aCtx.roots.delete(treeNode as UITreeNodeContexts);
                         }
                     }
                 default:
@@ -1307,7 +1308,7 @@ export const _Apply = {
                 Wired.instanced.delete(boundary);
             }
             // Add root removals for rendering info.
-            const domUnmounts: GroundedTreeNode[] = destroyDom ? boundary.getTreeNodesForDomRoots(false) : []; // <-- shouldn't we get nested..? No but we are in a loop.. okay..
+            const domUnmounts: UITreeNode[] = destroyDom ? boundary.getTreeNodesForDomRoots(false) : []; // <-- shouldn't we get nested..? No but we are in a loop.. okay..
             // Search for special defs inside.
             // .. The nullifyDefs process is only needed if has kids.
             if (boundary._innerDef && boundary._innerDef.childDefs[0]) {
@@ -1373,7 +1374,7 @@ export const _Apply = {
             // .. Note that if reverse the order above, should change this to newOnes.concat(renderInfos).
             // .. But while running both in tree order, we do renderInfos.concat(newOnes).
             if (destroyDom)
-                renderInfos = renderInfos.concat(domUnmounts.map(treeNode => ({ treeNode: treeNode as (GroundedTreeNodeDom | GroundedTreeNodeBoundary), remove: true }) as UIDomRenderInfo ));
+                renderInfos = renderInfos.concat(domUnmounts.map(treeNode => ({ treeNode: treeNode as (UITreeNodeDom | UITreeNodeBoundary), remove: true }) as UIDomRenderInfo ));
             // Mark as destroyed.
             boundary.isMounted = null;
         }
@@ -1413,7 +1414,7 @@ export const _Apply = {
         if (!aDef.treeNode || !aDef.attachedContexts && !toDef.attachedContexts)
             return;
         // Prepare.
-        const treeNode: GroundedTreeNode = aDef.treeNode;
+        const treeNode: UITreeNode = aDef.treeNode;
         const cBoundary = treeNode.type === "boundary" && treeNode.boundary as UILiveSource || null;
         const fromTunnels = aDef.attachedContexts || {};
         // Update.
@@ -1521,7 +1522,7 @@ export const _Apply = {
 
         // Loop down the tree until the branches die (out of nothing to update).
         // .. We will go down with oldContexts that gradually narrows down if a sub context replaces it.
-        type LoopPair = [GroundedTreeNode, typeof origOldContexts];
+        type LoopPair = [UITreeNode, typeof origOldContexts];
         let infos: LoopPair[] = [ [ sourceBoundary.baseTreeNode, origOldContexts ] ];
         let info: LoopPair | undefined;
         let i = 0;
@@ -1930,11 +1931,11 @@ export const _Apply = {
      * - If includeNested is true, searches recursively inside sub boundaries - not just within the render scope. (Normally stops after meets a source or content boundary.)
      * - If includeInHosts is true, extends the search to inside nested hosts as well. (Not recommended.)
      * - If includeInInactive is true, extends the search to include inactive boundaries and treeNodes inside them. */
-    findTreeNodesWithin(baseTreeNode: GroundedTreeNode, okTypes: Partial<Record<GroundedTreeNodeType, boolean>>, maxCount: number = 0, includeNested: boolean = false, includeInHosts: boolean = false, validator?: (treeNode: GroundedTreeNode) => any): GroundedTreeNode[] {
+    findTreeNodesWithin(baseTreeNode: UITreeNode, okTypes: Partial<Record<UITreeNodeType, boolean>>, maxCount: number = 0, includeNested: boolean = false, includeInHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
         // Prepare.
-        const list: GroundedTreeNode[] = [];
-		let treeNodesLeft : GroundedTreeNode[] = [baseTreeNode];
-		let treeNode : GroundedTreeNode | undefined;
+        const list: UITreeNode[] = [];
+		let treeNodesLeft : UITreeNode[] = [baseTreeNode];
+		let treeNode : UITreeNode | undefined;
         let i = 0;
         const origBoundary = baseTreeNode.boundary;
         // Loop recursively in tree order.
@@ -1966,9 +1967,27 @@ export const _Apply = {
         return list
     },
 
-    getTreeNodesForDomRootsUnder(rootNode: GroundedTreeNode, inNestedBoundaries: boolean = false, includeEmpty: boolean = false, maxCount: number = 0): GroundedTreeNodeDom[] {
+
+    // - Static helpers - //
+
+    queryDomElement<T extends Element = Element>(treeNode: UITreeNode, selector: string, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false): T | null {
+        const validator = (tNode: UITreeNode) => tNode.domNode && tNode.domNode instanceof Element && tNode.domNode.matches(selector);
+        const foundNode = _Apply.findTreeNodesWithin(treeNode, { dom: true }, 1, allowWithinBoundaries, allowOverHosts, validator)[0];
+        return foundNode && foundNode.domNode as T || null;
+    },
+
+    queryDomElements<T extends Element = Element>(treeNode: UITreeNode, selector: string, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false): T[] {
+        const validator = (tNode: UITreeNode) => tNode.domNode && tNode.domNode instanceof Element && tNode.domNode.matches(selector);
+        return _Apply.findTreeNodesWithin(treeNode, { dom: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.domNode as T);
+    },
+
+    findTreeNodes(treeNode: UITreeNode, types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
+        return _Apply.findTreeNodesWithin(treeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator);
+    },
+
+    getTreeNodesForDomRootsUnder(rootNode: UITreeNode, inNestedBoundaries: boolean = false, includeEmpty: boolean = false, maxCount: number = 0): UITreeNodeDom[] {
         // Loop each root node.
-        let collected: GroundedTreeNodeDom[] = [];
+        let collected: UITreeNodeDom[] = [];
         for (const treeNode of rootNode.children) {
             // Skip - doesn't have any.
             if (!treeNode.domNode && !includeEmpty)

@@ -1,6 +1,6 @@
 {
     "name": "ui-dom",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "description": "Powerful state based rendering library (in JS/TS) - inspired by React, but totally reconceptualized.",
     "keywords": [
         "ui-dom",

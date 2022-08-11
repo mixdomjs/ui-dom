@@ -112,7 +112,7 @@ export const _Lib = {
      *     + If you want to use the validation only for Arrays and Records but not Strings, add 2nd parameter `string` to the type: `CleanClassName<ValidName, string>`
      * - Unfortunately, the name validation inputted here only works for Array and Record types, and single strings.
      * - To use concatenated class name strings (eg. "bold italic"), you should:
-     *     1. Declare a validator by: `const classNames: ValidateNames<ValidName> = Q.classNames;`
+     *     1. Declare a validator by: `const classNames: ValidateNames<ValidName> = uiDom.classNames;`
      *     2. Then use it like this: `const okName = classNames("bold italic", ["bold"], {"italic": false, "bold": true})`;
      */
     cleanHtmlClass<ValidNames extends string = string, SingleName extends string = ValidNames>(...classNames: Array<UIPreClassName<ValidNames, SingleName> | "" | false | 0 | null | undefined>): string {

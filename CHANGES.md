@@ -1,3 +1,30 @@
+## v1.7.1
+
+### Enhancements
+
+- Refined that using .getDomNodes(true) for refs will include multiple root nodes if has multiple roots - not just the first one. So for example, if refers to a boundary and it returns a fragment, will get all the root dom nodes.
+- Improved and clarified the mixin TypeScript support.
+  - For all 3 basic use cases: use, extend and create combos.
+  - Also refined that the UILiveMixin and others utilize types from interface (vs. the programmatically created class).
+
+
+### Optimizations
+
+- Optimized that adjacent string content are joined together in the createDef process - there's no need to create a textNode (or wrap a tag) around each. So for example: `<span>hello: {someName}!</span>` results in `uiDom.def("span", null, "name :", someName, "!")`, and so we can just join "name :", someName and "!" together (if all are strings). (As this is in the static part, we can't include a setting for this (at least currently).)
+
+### Changes (in JavaScript)
+
+- In the processing, refactored needsChildren from Fragment's props to the def - so fragment has no props after being handled as a def.
+- Changed uiDom.Fragment's `needsChildren` prop to `withContent` to avoid confusion with how `contentApi.needsChildren` behaves. Also matches with `uiDom.withContent` which clarifies the feature.
+- Removed UILive.initContext method. It's just confusing, and if needs to init the local context can do it like state: live.context = {...}.
+- Removed unused getHostsFromTreeNodes static method from UIContextServices.
+
+### Changes in TypeScript & Comments
+
+- Changed internal typing name from GroundedTreeNode* to UITreeNode*.
+- Cleared up some comments. Especially the confusing old comments from UIContextServices .refreshNow method. (It explained the earlier slower way to get the nodes in the tree - they are now based on direct interests.)
+- Removed the UISomeClassType from all related, as the type didn't work correctly. Simply use typeof UISomeClass. The only exception is UIWiredType as it needs to have generics inside a static class. It's also just clearer to have its as own type because of its special half-static-like functionality.
+
 ## v1.7.0
 
 ### Features
@@ -31,6 +58,7 @@
 ### Changes
 
 - Fixed the generational order related to unmounting UIRefs (in _Apply.destroyBoundary) after v1.6.1.
+- Changed UISourceBoundary.qId to UISourceBoundary.uiId.
 
 ### Package
 

@@ -74,10 +74,22 @@ export const _Defs = {
 
         // Add childDefs to the def.
         const childDefs: UIDefTarget[] = [];
+        let wasText = false;
+        let iContent = 0;
         for (const content of contents) {
+            // Let's join adjacent string content together - there's no need to create a textNode for each.
+            // .. This improves performance: 1. less dom operations, 2. less stuff (= less processing).
+            let isText = typeof content === "string";
+            if (content && isText && wasText) {
+                childDefs[iContent-1].domContent += content as string;
+                continue;
+            }
+            // Create def.
             const def = _Defs.createDefFromContent(content);
-            if (def)
-                childDefs.push(def);
+            if (def) {
+                iContent = childDefs.push(def);
+                wasText = isText;
+            }
         }
 
         // Static, render immediately and return the def.
@@ -101,9 +113,9 @@ export const _Defs = {
 
         // Props.
         const needsProps = !!tag;
-        if (defType === "fragment") {
-            if (origProps && origProps.needsChildren !== undefined)
-                targetDef.props = { needsChildren: origProps.needsChildren };
+        if (targetDef._uiDefType === "fragment") {
+            if (origProps && origProps.withContent !== undefined)
+                targetDef.withContent = origProps.withContent;
         }
         else if (origProps) {
             // Copy.
@@ -250,7 +262,7 @@ export const _Defs = {
         if (key != null)
             def.key = key;
         // We always need to have a key for true content pass.
-        // .. and it should be unique and common to all Q.Content defs unless specifically given a key.
+        // .. and it should be unique and common to all uiDom.Content defs unless specifically given a key.
         else if (!isCopy)
             def.key = _Defs.ContentKey;
         // Return def.
@@ -261,7 +273,7 @@ export const _Defs = {
         return _Defs.newContentPassDef(key, true);
     },
 
-    // A unique but common to all key for Q.Content defs - used unless specifically given a key.
+    // A unique but common to all key for uiDom.Content defs - used unless specifically given a key.
     ContentKey: {},
 
 }

@@ -5,8 +5,8 @@
 import {
     ClassType,
     Dictionary,
-    GroundedTreeNode,
-    GroundedTreeNodeDom,
+    UITreeNode,
+    UITreeNodeDom,
     UIAllContexts,
     UIDefApplied,
     UIDefTarget,
@@ -58,7 +58,7 @@ class UIBaseBoundary {
      *   4. When the boundary re-renders, it will reuse the applied defs and if did for any sub-boundary,
      *      will then reuse the same baseTreeNode and just modify its parent accordingly. So the sub-boundary doesn't even need to know about it.
      */
-    baseTreeNode: GroundedTreeNode;
+    baseTreeNode: UITreeNode;
 
 
     // - Boundary refs - //
@@ -80,7 +80,7 @@ class UIBaseBoundary {
     _outerContextsWere?: Record<string, UIContext | null>;
 
 
-    constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: GroundedTreeNode) {
+    constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: UITreeNode) {
         // Init.
         this.uiHost = uiHost;
         this.baseTreeNode = baseTreeNode;
@@ -95,11 +95,11 @@ class UIBaseBoundary {
 
     // - Getters - //
 
-    public getRootTreeNodes(): GroundedTreeNode[] {
+    public getRootTreeNodes(): UITreeNode[] {
         return [...this.baseTreeNode.children];
     }
 
-    public getTreeNodesForDomRoots(inNestedBoundaries: boolean = false, includeEmpty: boolean = false): GroundedTreeNodeDom[] {
+    public getTreeNodesForDomRoots(inNestedBoundaries: boolean = false, includeEmpty: boolean = false): UITreeNodeDom[] {
         return _Apply.getTreeNodesForDomRootsUnder(this.baseTreeNode, inNestedBoundaries, includeEmpty);
     }
 
@@ -211,7 +211,7 @@ export class UIContentBoundary extends UIBaseBoundary {
     // This is the moment we open up our personal copy of the envelop. It has been just opened and reclosed with treeNode appropriate for us.
     // .. Note. We use the basis of UIBaseBoundary, so we can use the same _Apply methods for UISourceBoundary and UIContentBoundary.
     //
-    constructor(outerDef: UIDefApplied, targetDef: UIDefTarget, treeNode: GroundedTreeNode, sourceBoundary: UISourceBoundary) {
+    constructor(outerDef: UIDefApplied, targetDef: UIDefTarget, treeNode: UITreeNode, sourceBoundary: UISourceBoundary) {
         // Base boundary.
         super(sourceBoundary.uiHost, outerDef, treeNode);
         // Assign.
@@ -282,7 +282,7 @@ export class UISourceBoundary extends UIBaseBoundary {
 
     // - Init & destroy - //
 
-    constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: GroundedTreeNode, sourceBoundary?: UISourceBoundary) {
+    constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: UITreeNode, sourceBoundary?: UISourceBoundary) {
         // Init.
         super(uiHost, outerDef, baseTreeNode);
         this._isVirgin = true;
@@ -317,7 +317,7 @@ export class UISourceBoundary extends UIBaseBoundary {
                     else {
                         // Create a UILive instance.
                         this.type = "live";
-                        const QClass = class extends UILiveMixin(Object) {} as ClassType<UILive>;
+                        const QClass = class extends UILiveMixin(Object) {};
                         this.live = new QClass(this._outerDef.props || {});
                         this.live.render = this._outerDef.tag as UILive["render"];
                     }

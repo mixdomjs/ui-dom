@@ -3,17 +3,17 @@
 // - Imports - //
 
 import {
-    ClassType,
     Dictionary,
+    ClassType,
+    ClassBaseMixer,
     UIDefTarget,
     UIMiniFunction,
     UIRenderOutput,
     UIUpdateCompareMode,
 } from "../static/_Types";
 import { uiDom } from "../uiDom";
-import { UIHost } from "./UIHost";
 
-export function UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
+function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
     return class _UIMini extends Base {
 
@@ -107,11 +107,15 @@ export interface UIMini<Props extends Dictionary = {}> {
     render(_props: Props): UIRenderOutput | UIMiniFunction<Props>;
 
 }
-export class UIMini<Props extends Dictionary = {}> extends UIMiniMixin(Object) { }
-export type UIMiniType<Props extends Dictionary = {}> = {
-    new (props: Props, updateMode?: UIUpdateCompareMode | null): UIHost;
-    readonly UI_DOM_TYPE: "Mini";
-}
+export class UIMini<Props extends Dictionary = {}> extends _UIMiniMixin(Object) { }
 
 export const createMini = <Props extends Dictionary = {}>( func: (mini: UIMini<Props>, props: Props) => ReturnType<UIMiniFunction<Props>>): UIMiniFunction<Props> =>
     function(props) { return func(this, props); };
+
+/** There are two ways you can use this:
+ * 1. Call this to give basic UIMini features with types for Props and such being empty.
+ *      * For example: `class MyMix extends UIMiniMixin(MyBase) {}`
+ * 2. If you want to define Props and such, use this simple trick instead:
+ *      * For example: `class MyMix extends (UIMiniMixin as ClassBaseMixer<UIMini<MyProps>>)(MyBase) {}`
+ */
+export const UIMiniMixin = _UIMiniMixin as ClassBaseMixer<UIMini>;

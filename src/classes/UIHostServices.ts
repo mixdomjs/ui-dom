@@ -3,7 +3,7 @@
 // - Imports - //
 
 import {
-    GroundedTreeNode,
+    UITreeNode,
     UISourceBoundaryChange,
     UIDomRenderInfo,
     UISourceBoundaryId,
@@ -236,8 +236,8 @@ export class UIHostServices {
 
     /** This is the core whole command to update a source boundary including checking if it should update and if has already been updated.
      * - It handles the _preUpdates bookkeeping and should update checking and return infos for changes.
-     * - It should only be called from two places: the applyUpdates flow above, and within _Apply.applyDefPairs for updating nested. */
-    public updateSourceBoundary(boundary: UISourceBoundary, forceUpdate: boolean | "all" = false, movedNodes?: GroundedTreeNode[], bInterested?: UISourceBoundary[]): UIChangeInfos | null {
+     * - It should only be called from a few places: 1. applyUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries. */
+    public updateSourceBoundary(boundary: UISourceBoundary, forceUpdate: boolean | "all" = false, movedNodes?: UITreeNode[], bInterested?: UISourceBoundary[]): UIChangeInfos | null {
 
         // Parse.
         let shouldUpdate = !!forceUpdate;
@@ -314,7 +314,7 @@ export class UIHostServices {
                         preShould = true;
                     // Otherwise check by the optional callback - supporting MiniWired special case.
                     else {
-                        const mini = boundary.mini.shouldUpdate ? boundary.mini as UIMini : boundary.type === "mini" && boundary.mini.constructor as UIWiredType || null;
+                        const mini = boundary.mini.shouldUpdate ? boundary.mini as UIMini : boundary.type === "mini" && boundary.mini.constructor as (UIWiredType | null);
                         if (mini && mini.shouldUpdate)
                             preShould = mini.shouldUpdate( preUpdates.props || null, newUpdates.props || null );
                     }
@@ -382,7 +382,7 @@ export class UIHostServices {
             if (live)
                 live.uiBeforeUpdate && live.uiBeforeUpdate(preUpdates, newUpdates, shouldUpdate);
             // else if (boundary.mini) {
-            //     const mini = boundary.mini.beforeUpdate ? boundary.mini as UIMini : boundary.type === "mini" && boundary.mini.constructor as UIWiredType || null;
+            //     const mini = boundary.mini.beforeUpdate ? boundary.mini as UIMini : boundary.type === "mini" && boundary.mini.constructor as (UIWiredType || null);
             //     if (mini && mini.beforeUpdate)
             //         mini.beforeUpdate(preUpdates.props || null, newUpdates.props || null, shouldUpdate);
             // }

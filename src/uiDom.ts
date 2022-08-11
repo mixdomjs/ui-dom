@@ -11,9 +11,9 @@ import {
 import { _Lib } from "./static/_Lib";
 import { _Defs } from "./static/_Defs";
 import { UIFragment, UIPortal, UIElement } from "./classes/UIPseudoClasses";
+import { createSpread } from "./classes/UISpread";
 import { createEffect, UIEffect, UIEffectMixin } from "./classes/UIEffect";
 import { createRef, UIRef, UIRefMixin } from "./classes/UIRef";
-import { createSpread } from "./classes/UISpread";
 import { createMini, UIMini, UIMiniMixin } from "./classes/UIMini";
 import { createWired } from "./classes/UIWired";
 import { createLive, UILive, UILiveMixin } from "./classes/UILive";
@@ -75,6 +75,7 @@ export const uiDom = {
      *   .. If you deliberately want to play with which is the real one and which is a copy, use uiDom.ContentCopy or uiDom.copyContent(someKey) for the others. */
     Content: uiContent,
     /** If you want to include things only if actually will have content for uiDom.Content.
+     * - Use like this: <div>{uiDom.withContent(<span class="content">{uiDom.Content}</span>)}</div>
      * - Technically this uses .getChildren() to check for Mini/Live, and so adds a children dependency.
      * - For SpreadFunctions they have their own procedure, so handled in there. */
     withContent: uiWithContent,

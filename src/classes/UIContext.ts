@@ -4,8 +4,9 @@
 
 import {
     Dictionary,
+    ClassType,
     PropType,
-    GroundedTreeNodeContexts,
+    UITreeNodeContexts,
     UIUponAction,
     UIUponData,
     UIUponPreAction,
@@ -13,9 +14,9 @@ import {
     UIActions,
     UIQuestion,
     UIQuestionary,
-    ClassType,
     UIContextData,
     UIAllContexts,
+    ClassBaseMixer,
 } from "../static/_Types";
 import { UILiveSource } from "./UIBoundary";
 import { UIContextServices } from "./UIContextServices";
@@ -28,7 +29,7 @@ export type UIContextSettingsUpdate = {
     postActions?: null | string | string[] | Set<string>;
     quickActions?: true | null | string | string[] | Set<string>;
 };
-export function UIContextMixin(Base: ClassType) {
+function _UIContextMixin(Base: ClassType) {
 
     return class _UIContext extends Base {
 
@@ -39,7 +40,7 @@ export function UIContextMixin(Base: ClassType) {
         // Collections.
         /** The roots where this context is inserted.
          * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-        public roots: Map<GroundedTreeNodeContexts, string>;
+        public roots: Map<UITreeNodeContexts, string>;
         /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
         public dataBoundaries: Map<UILiveSource, Set<string>>;
         /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
@@ -298,7 +299,7 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     // Collections.
     /** The roots where this context is inserted.
      * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-    roots: Map<GroundedTreeNodeContexts, string>;
+    roots: Map<UITreeNodeContexts, string>;
     /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
     dataBoundaries: Map<UILiveSource, Set<string>>;
     /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
@@ -426,26 +427,33 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     // - Optional assignable callbacks - //
 
     // Tree nodes.
-    onInsertInto?(treeNode: GroundedTreeNodeContexts, name: string): void;
-    onRemoveFrom?(treeNode: GroundedTreeNodeContexts): void;
+    onInsertInto?(treeNode: UITreeNodeContexts, name: string): void;
+    onRemoveFrom?(treeNode: UITreeNodeContexts): void;
 
     // Boundary interests.
     onDataInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
     onActionInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
 
 }
-export class UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> extends UIContextMixin(Object) {
+export class UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> extends _UIContextMixin(Object) {
     // There's no passing arguments if doesn't use as a mixin.
     constructor(data?: Data, settings?: UIContextSettingsUpdate) { super(data, settings); }
 }
-export type UIContextType<Data extends UIContextData = any, Actions extends UIActions = {}> = {
+export type UIContextType<Data extends UIContextData = any, Actions extends UIActions = {}> = ClassType<UIContext<Data, Actions>, [Data?, UIContextSettingsUpdate?]> & {
     readonly UI_DOM_TYPE: "Context";
-    new (data?: Data, settings?: UIContextSettingsUpdate): UIContext<Data, Actions>;
 }
 
 /** Create a new context. */
 export const createContext = <Data = any, Actions extends UIActions = UIActions>(data?: Data, settings?: UIContextSettingsUpdate): UIContext<Data, Actions> =>
     new UIContext<Data, Actions>(data, settings);
+
+/** There are two ways you can use this:
+ * 1. Call this to give basic UIContext features with types for Data and Actions being empty.
+ *      * For example: `class MyMix extends UIContextMixin(MyBase) {}`
+ * 2. If you want to define Data and Actions, use this simple trick instead:
+ *      * For example: `class MyMix extends (UIContextMixin as ClassBaseMixer<UIContext<MyData, MyActions>>)(MyBase) {}`
+ */
+export const UIContextMixin = _UIContextMixin as ClassBaseMixer<UIContext>;
 
 
 // - Multi - //
@@ -461,9 +469,8 @@ export class UIContexts<AllContexts extends UIAllContexts = {}> {
     // We need a constructor here for typescript TSX.
     constructor(_props: UIContextsProps) {}
 }
-export type UIContextsType<AllContexts extends UIAllContexts = {}> = {
+export type UIContextsType<AllContexts extends UIAllContexts = {}> = ClassType<UIContexts<AllContexts>, [UIContextsProps]> & {
     readonly UI_DOM_TYPE: "Contexts";
-    new (props: UIContextsProps): UIContexts<AllContexts>;
 }
 /** Create multiple named contexts. (Useful for tunneling.) */
 export const createContexts = <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name]> }, AllData extends { [Name in keyof Contexts]: Contexts[Name]["data"] } = { [Name in keyof Contexts]: Contexts[Name]["data"] }>(contextsData: AllData): Contexts => {

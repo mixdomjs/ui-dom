@@ -2,7 +2,7 @@
 
 // - Imports - //
 
-import { ClassType, UIUpdateCompareMode } from "../static/_Types";
+import { ClassBaseMixer, ClassType, UIUpdateCompareMode } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 
 
@@ -12,7 +12,7 @@ import { _Lib } from "../static/_Lib";
  * - If returns a new effect function, it will be run when unmounting the effect. */
 export type UIEffectOnMount = () => void | UIEffectOnUnmount;
 export type UIEffectOnUnmount = () => void;
-export function UIEffectMixin<Memory = any>(Base: ClassType) {
+function _UIEffectMixin<Memory = any>(Base: ClassType) {
 
     return class _UIEffect extends Base {
 
@@ -122,15 +122,13 @@ export interface UIEffect<Memory = any> {
     cancel(skipUnmount?: boolean, clearEffect?: boolean): void;
 
 }
-export class UIEffect<Memory = any> extends UIEffectMixin(Object) {}
-
-export type UIEffectType<Memory = any> = {
-    new (memory?: Memory, effect?: () => void, ...baseParams: any[]): UIEffect;
-    /** For quick getting modes to depth.
-     * - Positive values can go however deep.
-     * - Note that -1 means deep, but below -2 means will not check. */
-    DEPTH_BY_MODE: typeof UIEffect.DEPTH_BY_MODE;
-    readonly UI_DOM_TYPE: "Effect";
-}
-
+export class UIEffect<Memory = any> extends _UIEffectMixin(Object) {}
 export const createEffect = <Memory = any>(effect?: UIEffectOnUnmount, memory?: Memory) => new UIEffect<Memory>(effect, memory);
+
+/** There are two ways you can use this:
+ * 1. Call this to give basic UIEffect features.
+ *      * For example: `class MyMix extends UIEffectMixin(MyBase) {}`
+ * 2. If you want to define Memory, use this simple trick instead:
+ *      * For example: `class MyMix extends (UIEffectMixin as ClassBaseMixer<UIEffect<MyMemory>>)(MyBase) {}`
+ */
+export const UIEffectMixin = _UIEffectMixin as ClassBaseMixer<UIEffect>;

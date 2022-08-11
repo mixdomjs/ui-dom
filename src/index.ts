@@ -1,20 +1,14 @@
 
 export { uiDom as UIDom } from "./uiDom";
 export * from "./uiDom";
-export {
-    UIFragment,
-    UIFragmentType,
-    UIPortal,
-    UIPortalType,
-    UIElement,
-    UIElementType,
-} from "./classes/UIPseudoClasses";
-export { UIEffect, UIEffectMixin, UIEffectType } from "./classes/UIEffect";
-export { UIRef, UIRefMixin, UIRefType } from "./classes/UIRef";
-export { UISpread, UISpreadType, createSpread } from "./classes/UISpread";
-export { UIMini, UIMiniMixin, UIMiniType, createMini } from "./classes/UIMini";
-export { UILive, UILiveMixin, UILiveType, createLive } from "./classes/UILive";
-export { UIHost, UIHostMixin, UIHostType, createHost } from "./classes/UIHost";
+export { UIFragment, UIPortal, UIElement } from "./classes/UIPseudoClasses";
+export { UISpread, createSpread } from "./classes/UISpread";
+export { UIEffect, UIEffectMixin } from "./classes/UIEffect";
+export { UIRef, UIRefMixin } from "./classes/UIRef";
+export { UIMini, UIMiniMixin, createMini } from "./classes/UIMini";
+export { UILive, UILiveMixin, createLive } from "./classes/UILive";
+export { UIHost, UIHostMixin, createHost } from "./classes/UIHost";
+export { UIWired, UIWiredType, createWired } from "./classes/UIWired";
 export {
     UIContext,
     UIContextMixin,

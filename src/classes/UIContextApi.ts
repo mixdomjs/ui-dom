@@ -295,8 +295,6 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
             data[name] = ctx ? ctx.data : null;
         }
         // Rebuild.
-        // // We set a readonly value here - it's on purpose: we want it to be readonly for all others except in this method and live.initContext().
-        // const live = this.boundary.live as UILive & { context: Dictionary; };
         const live = this.boundary.live;
         if (live.buildContext)
             live.context = live.buildContext(data as UIAllContextsDataWithNull<AllContexts>, ctxs as UIAllContextsWithNull<AllContexts>);
