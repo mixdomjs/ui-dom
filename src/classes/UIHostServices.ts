@@ -32,29 +32,29 @@ export class UIHostServices {
     /** To create unique id (per uiHost) for each boundary, a simple counter is used. */
     private idCounter: number;
 
-    // Update flow.
-    private updateTimer: number | null;
-    private delayedUpdates: Set<UISourceBoundary>;
-    private _forceRenderTimeout?: number | null;
-    private _isUpdating?: boolean;
-
     // Listeners.
     private listeners: Record<"update" | "render", (() => void)[]>;
 
-    // Related to pending render infos and boundary calls (like uiDidMount and uiDidUpdate).
-    private pendingTimer: number | null;
-    private pendingBoundaryCalls: UISourceBoundaryChange[][];
-    private pendingRenderInfos: UIDomRenderInfo[][];
+    // Update flow.
+    private updateTimer: number | null;
+    private updatesPending: Set<UISourceBoundary>;
+    private _isUpdating?: boolean;
+    private _forcePostTimeout?: number | null;
+
+    // Post flow: execute render infos and boundary calls (eg. uiDidMount and uiDidUpdate).
+    private renderTimer: number | null;
+    private postBoundaryCalls: UISourceBoundaryChange[][];
+    private postRenderInfos: UIDomRenderInfo[][];
 
     constructor(uiHost: UIHost) {
         this.uiHost = uiHost;
         this.uiRender = new UIRender(uiHost.settings);
         this.idCounter = 0;
         this.updateTimer = null;
-        this.pendingTimer = null;
-        this.pendingRenderInfos = [];
-        this.pendingBoundaryCalls = [];
-        this.delayedUpdates = new Set();
+        this.renderTimer = null;
+        this.updatesPending = new Set();
+        this.postRenderInfos = [];
+        this.postBoundaryCalls = [];
         this.listeners = {
             update: [],
             render: []
@@ -71,18 +71,18 @@ export class UIHostServices {
     }
 
     public clearTimers(forgetPending: boolean = false): void {
-        // Unless we are destroying the whole thing, it's best to (update and) render the pending changes into dom.
+        // Unless we are destroying the whole thing, it's best to (update and) render the post changes into dom.
         if (!forgetPending)
-            this.applyUpdates(null);
+            this.runUpdates(null);
         // Clear update timer.
         if (this.updateTimer !== null) {
             window.clearTimeout(this.updateTimer);
             this.updateTimer = null;
         }
         // Clear render timer.
-        if (this.pendingTimer !== null) {
-            window.clearTimeout(this.pendingTimer);
-            this.pendingTimer = null;
+        if (this.renderTimer !== null) {
+            window.clearTimeout(this.renderTimer);
+            this.renderTimer = null;
         }
     }
 
@@ -120,53 +120,55 @@ export class UIHostServices {
             if (!thruBoundary._preUpdates)
                 continue;
             // Update and collect.
-            this.addToUpdates(thruBoundary, { contextual: true });
+            this.absorbUpdates(thruBoundary, { contextual: true });
         }
         // Flush.
-        this.applyUpdates();
+        this.runUpdates();
     }
 
-    // - Pending updates - //
+    // - Has pending updates or post process - //
 
-    public removeFromUpdates(boundary: UISourceBoundary): void {
-        this.delayedUpdates.delete(boundary);
+    public hasPending(updateSide: boolean = true, postSide: boolean = true): boolean {
+        return updateSide && this.updateTimer !== null || postSide && this.renderTimer !== null || false;
     }
 
-    public hasPending(updateSide: boolean = true, renderSide: boolean = true): boolean {
-        return updateSide && this.updateTimer !== null || renderSide && this.updateTimer !== null || false;
+    // - 1. Update flow - //
+
+    public cancelUpdates(boundary: UISourceBoundary): void {
+        this.updatesPending.delete(boundary);
     }
 
     /** This is the main method to update a boundary.
      * - It applies the updates to bookkeeping immediately.
      * - The actual update procedure is either timed out or immediate according to settings.
      *   .. It's recommended to use a tiny update timeout (eg. 0ms) to group multiple updates together. */
-    public addToUpdates(boundary: UISourceBoundary, updates: UILiveNewUpdates, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
+    public absorbUpdates(boundary: UISourceBoundary, updates: UILiveNewUpdates, forceUpdateTimeout?: number | null, forcePostTimeout?: number | null): void {
 
         // Dead.
         if (boundary.isMounted === null)
             return;
 
         // Update temporary time out if given a tighter time.
-        if (forceRenderTimeout !== undefined) {
-            if ((forceRenderTimeout === null) || (this._forceRenderTimeout === undefined) || (this._forceRenderTimeout !== null) && (forceRenderTimeout < this._forceRenderTimeout) )
-                this._forceRenderTimeout = forceRenderTimeout;
+        if (forcePostTimeout !== undefined) {
+            if ((forcePostTimeout === null) || (this._forcePostTimeout === undefined) || (this._forcePostTimeout !== null) && (forcePostTimeout < this._forcePostTimeout) )
+                this._forcePostTimeout = forcePostTimeout;
         }
 
         // Update the bookkeeping.
         _Apply.preSetUpdates(boundary, updates);
 
         // Is rendering, re-render immediately, and go no further.
-        if (boundary._renderingState) {
-            boundary._renderingState = "re-updated";
+        if (boundary._renderState) {
+            boundary._renderState = "re-updated";
             return;
         }
 
-        // Already was pending - nothing more to do.
-        if (this.delayedUpdates.has(boundary))
+        // Already was post - nothing more to do.
+        if (this.updatesPending.has(boundary))
             return;
 
         // Add to collection.
-        this.delayedUpdates.add(boundary);
+        this.updatesPending.add(boundary);
 
         // If is updating, just wait.
         if (this._isUpdating)
@@ -177,22 +179,22 @@ export class UIHostServices {
     }
 
     /** This method should always be used when executing updates within a uiHost - it's the main orchestrator of updates.
-     * To add to pending updates use the .addToUpdates() method above. */
-    private applyUpdates(renderTimeout?: number | null) {
+     * To add to post updates use the .absorbUpdates() method above. */
+    private runUpdates(postTimeout?: number | null) {
 
         // Set flags.
         this.updateTimer = null;
         this._isUpdating = true;
         // Get render timeout.
-        renderTimeout = renderTimeout !== undefined ? renderTimeout : (this._forceRenderTimeout !== undefined ? this._forceRenderTimeout : this.uiHost.settings.renderTimeout);
-        delete this._forceRenderTimeout;
+        postTimeout = postTimeout !== undefined ? postTimeout : (this._forcePostTimeout !== undefined ? this._forcePostTimeout : this.uiHost.settings.renderTimeout);
+        delete this._forcePostTimeout;
 
         // Update again immediately, if new ones collected.
-        while (this.delayedUpdates.size) {
+        while (this.updatesPending.size) {
 
             // Copy and clear delayed, so can add new during.
-            let sortedUpdates = [...this.delayedUpdates];
-            this.delayedUpdates.clear();
+            let sortedUpdates = [...this.updatesPending];
+            this.updatesPending.clear();
 
             // Do smart sorting here if has at least 2 boundaries.
             if (sortedUpdates[1])
@@ -204,21 +206,21 @@ export class UIHostServices {
 
             // Run update for each.
             for (const boundary of sortedUpdates) {
-                const updates = this.updateSourceBoundary(boundary);
+                const updates = this.updateBoundary(boundary);
                 if (updates) {
                     renderInfos = renderInfos.concat(updates[0]);
                     boundaryUpdates = boundaryUpdates.concat(updates[1]);
                 }
             }
 
-            // Add to post pending.
+            // Add to post post.
             if (renderInfos[0])
-                this.pendingRenderInfos.push(renderInfos);
+                this.postRenderInfos.push(renderInfos);
             if (boundaryUpdates[0]) {
                 if (this.uiHost.settings.uiDidImmediateCalls)
                     _Apply.callBoundaryChanges(boundaryUpdates);
                 else
-                    this.pendingBoundaryCalls.push(boundaryUpdates);
+                    this.postBoundaryCalls.push(boundaryUpdates);
             }
         }
 
@@ -228,7 +230,7 @@ export class UIHostServices {
                 listener();
 
         // Render.
-        this.refreshWithTimeout("render", renderTimeout);
+        this.refreshWithTimeout("render", postTimeout);
 
         // Finished.
         delete this._isUpdating;
@@ -236,8 +238,8 @@ export class UIHostServices {
 
     /** This is the core whole command to update a source boundary including checking if it should update and if has already been updated.
      * - It handles the _preUpdates bookkeeping and should update checking and return infos for changes.
-     * - It should only be called from a few places: 1. applyUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries. */
-    public updateSourceBoundary(boundary: UISourceBoundary, forceUpdate: boolean | "all" = false, movedNodes?: UITreeNode[], bInterested?: UISourceBoundary[]): UIChangeInfos | null {
+     * - It should only be called from a few places: 1. runUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries. */
+    public updateBoundary(boundary: UISourceBoundary, forceUpdate: boolean | "all" = false, movedNodes?: UITreeNode[], bInterested?: UISourceBoundary[]): UIChangeInfos | null {
 
         // Parse.
         let shouldUpdate = !!forceUpdate;
@@ -284,14 +286,14 @@ export class UIHostServices {
                     preUpdates.state = _preUpdates.state;
                     newUpdates.state = live.state;
                 }
-                // Context.
+                // Remote.
                 if (_preUpdates.contextual) {
                     // Set to pre updates.
-                    preUpdates.context = live.context;
+                    preUpdates.remote = live.remote;
                     // Rebuild live context.
-                    cApi.rebuildContext();
+                    cApi.rebuildRemote();
                     // Set to new updates.
-                    newUpdates.context = live.context;
+                    newUpdates.remote = live.remote;
                 }
             }
             // Update flags.
@@ -364,7 +366,7 @@ export class UIHostServices {
                     if (propsWere === Wired.props)
                         continue;
                     // Collect interested.
-                    for (const b of Wired.instanced) {
+                    for (const b of Wired.boundaries) {
                         // Mark forced pre-interests.
                         // .. It's as if there's a "black box" inside the wired renderer, we don't know how it'll react - so we must force update.
                         if (!b._preUpdates)
@@ -408,12 +410,12 @@ export class UIHostServices {
     }
 
 
-    // - Post pending - //
+    // - 2. Post process flow - //
 
-    public addToPostPending(renderInfos: UIDomRenderInfo[] | null, boundaryChanges?: UISourceBoundaryChange[] | null, forceRenderTimeout?: number | null) {
-        // Add rendering to pending.
+    public absorbChanges(renderInfos: UIDomRenderInfo[] | null, boundaryChanges?: UISourceBoundaryChange[] | null, forcePostTimeout?: number | null) {
+        // Add rendering to post.
         if (renderInfos)
-            this.pendingRenderInfos.push(renderInfos);
+            this.postRenderInfos.push(renderInfos);
         // Add boundary calls.
         if (boundaryChanges) {
             // Immediately.
@@ -421,36 +423,39 @@ export class UIHostServices {
                 _Apply.callBoundaryChanges(boundaryChanges);
             // After rendering.
             else
-                this.pendingBoundaryCalls.push(boundaryChanges);
+                this.postBoundaryCalls.push(boundaryChanges);
         }
         // Refresh.
-        this.refreshWithTimeout("render", forceRenderTimeout);
+        this.refreshWithTimeout("render", forcePostTimeout);
     }
 
-    private applyPostPending() {
+    private flushRender() {
         // Clear timer ref.
-        this.pendingTimer = null;
+        this.renderTimer = null;
         // Render infos.
-        for (const renderInfos of this.pendingRenderInfos)
+        for (const renderInfos of this.postRenderInfos)
             if (renderInfos[0])
                 this.uiRender.applyToDom(renderInfos);
-        this.pendingRenderInfos = [];
+        this.postRenderInfos = [];
         // Boundary changes.
-        for (const boundaryChanges of this.pendingBoundaryCalls)
+        for (const boundaryChanges of this.postBoundaryCalls)
             if (boundaryChanges[0])
                 _Apply.callBoundaryChanges(boundaryChanges);
-        this.pendingBoundaryCalls = [];
+        this.postBoundaryCalls = [];
         // Call listeners.
         if (this.listeners.render[0])
             for (const listener of this.listeners.render)
                 listener();
     }
 
+
+    // - Helper - //
+
     private refreshWithTimeout(side: "update" | "render", forceTimeout?: number | null) {
         if (side === "update")
-            this.updateTimer = _Apply.refreshWithTimeout(this, this.applyUpdates, this.updateTimer, this.uiHost.settings.updateTimeout, forceTimeout);
+            this.updateTimer = _Apply.refreshWithTimeout(this, this.runUpdates, this.updateTimer, this.uiHost.settings.updateTimeout, forceTimeout);
         else
-            this.pendingTimer = _Apply.refreshWithTimeout(this, this.applyPostPending, this.pendingTimer, this.uiHost.settings.renderTimeout, forceTimeout);
+            this.renderTimer = _Apply.refreshWithTimeout(this, this.flushRender, this.renderTimer, this.uiHost.settings.renderTimeout, forceTimeout);
     }
 
 }

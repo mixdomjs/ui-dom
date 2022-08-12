@@ -24,10 +24,10 @@ import { UIContextServices } from "./UIContextServices";
 
 // - UIContext - //
 
-export type UIContextSettingsUpdate = {
+export type UIContextSettingsUpdate<ActionTypes extends string = string> = {
     refreshTimeout?: null | number;
-    postActions?: null | string | string[] | Set<string>;
-    quickActions?: true | null | string | string[] | Set<string>;
+    postActions?: null | ActionTypes | ActionTypes[] | Set<ActionTypes>;
+    quickActions?: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>;
 };
 function _UIContextMixin(Base: ClassType) {
 
@@ -35,33 +35,15 @@ function _UIContextMixin(Base: ClassType) {
 
         public static UI_DOM_TYPE = "Context";
 
-        // - Construct - //
 
-        // Collections.
-        /** The roots where this context is inserted.
-         * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-        public roots: Map<UITreeNodeContexts, string>;
-        /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-        public dataBoundaries: Map<UILiveSource, Set<string>>;
-        /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-        public actionBoundaries: Map<UILiveSource, Set<string>>;
-        /** Any external data listeners - called after the live components. */
-        public dataListeners: Map<UIUponData<UIContext>, Set<string> | true>;
-        /** Any external action listeners - called after the live components. */
-        public actionListeners: Map<UIUponAction<UIContext> | UIUponQuestion<UIContext>, Set<string> | true>;
-        /** Any external action pre-listeners: called immediately when action dispatched.
-         * - Return true to make the action be triggered after update and render (within each uiHost).
-         * - Return false to cancel dispatching the action (after pre-listeners).
-         * - Otherwise will dispatch the action normally upon refreshing the context.
-         * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
-        public actionHandlers: Map<UIUponPreAction<UIContext>, Set<string> | true>;
+        // - Basic members - //
 
         // Data.
         public data: any;
 
         // Settings.
         public settings: {
-            /** Set of action types that should always be dispatched after the update-n-render cycle.
+            /** Set of action types that should always be sent after the update-n-render cycle.
              * If overlaps with quickActions, will be interpreted as a post action.*/
             postActions: null | Set<string>;
             /** Set of action types that should always be run immediately.
@@ -78,11 +60,38 @@ function _UIContextMixin(Base: ClassType) {
          * They are the semi-private internal part of UIContext, so separated into its own class. */
         public services: UIContextServices;
 
+
+        // - Collection members - //
+        //
+        // .. These are kept here (instead of .services), for custom mangling (in case extends UIContext or UIContextMixin).
+
+        /** Contains the TreeNodes where this context is inserted as keys and values is a Set of names is inserted as.
+         * - This is not used for refresh flow (anymore), but could be very useful for custom purposes. */
+        public inTree: Map<UITreeNodeContexts, Set<string>>;
+        /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
+        public dataBoundaries: Map<UILiveSource, Set<string>>;
+        /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
+        public actionBoundaries: Map<UILiveSource, Set<string>>;
+        /** Any external data listeners - called after the live components. */
+        public dataListeners: Map<UIUponData<UIContext>, Set<string> | true>;
+        /** Any external action listeners - called after the live components. */
+        public actionListeners: Map<UIUponAction<UIContext> | UIUponQuestion<UIContext>, Set<string> | true>;
+        /** Any external action pre-listeners: called immediately when action sent.
+         * - Return true to make the action be triggered after update and render (within each uiHost).
+         * - Return false to cancel sending the action (after pre-listeners).
+         * - Otherwise will send the action normally upon refreshing the context.
+         * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
+        public actionHandlers: Map<UIUponPreAction<UIContext>, Set<string> | true>;
+
+
+        // - Construct - //
+
+        // Note that unfortunately in the  constructor, we can't access the Actions to use: UIContextSettingsUpdate[Actions["type"] & string]
         constructor(data: any, settings: UIContextSettingsUpdate | null | undefined, ...passArgs: any[]) {
             // We are a mixin.
             super(...passArgs);
             // Collections.
-            this.roots = new Map();
+            this.inTree = new Map();
             this.dataBoundaries = new Map();
             this.actionBoundaries = new Map();
             // Listeners.
@@ -109,34 +118,19 @@ function _UIContextMixin(Base: ClassType) {
 
         public modifySettings(settings: UIContextSettingsUpdate): void {
             if (settings.postActions !== undefined)
-                UIContext.addToSettingsActions(this.settings, "postActions", settings.postActions, false);
+                UIContextServices.flagActions(this.settings, "postActions", settings.postActions, false);
             if (settings.quickActions !== undefined)
-                UIContext.addToSettingsActions(this.settings, "quickActions", settings.quickActions, false);
+                UIContextServices.flagActions(this.settings, "quickActions", settings.quickActions, false);
             if (settings.refreshTimeout !== undefined)
                 this.settings.refreshTimeout = settings.refreshTimeout;
         }
 
-        public addAsPostActions(actionTypes: null | string | string[] | Set<string>, extend: boolean = true): void {
-            UIContext.addToSettingsActions(this.settings, "postActions", actionTypes, extend);
+        public flagPostActions(actionTypes: null | string | string[] | Set<string>, extend: boolean = true): void {
+            UIContextServices.flagActions(this.settings, "postActions", actionTypes, extend);
         }
-        public addAsQuickActions(actionTypes: true | null | string | string[] | Set<string>, extend: boolean = true): void {
-            UIContext.addToSettingsActions(this.settings, "quickActions", actionTypes, extend);
+        public flagQuickActions(actionTypes: true | null | string | string[] | Set<string>, extend: boolean = true): void {
+            UIContextServices.flagActions(this.settings, "quickActions", actionTypes, extend);
         }
-        public static addToSettingsActions(settings: UIContext["settings"], prop: "quickActions" | "postActions", actionTypes: true | null | string | string[] | Set<string>, extend: boolean = true): void {
-            if (actionTypes === null || actionTypes === true)
-                settings[prop] = actionTypes as null | Set<string>; // We allow true, but only for quick.
-            else {
-                const types = typeof actionTypes === "string" ? [actionTypes] : actionTypes;
-                const set = settings[prop];
-                if (extend && set && set !== true) {
-                    for (const type of types)
-                        set.add(type);
-                }
-                else
-                    settings[prop] = new Set(types);
-            }
-        }
-
 
         // - Listeners - //
 
@@ -163,45 +157,45 @@ function _UIContextMixin(Base: ClassType) {
         }
 
 
-        // - Dispatch actions - //
+        // - Sending actions - //
 
-        public dispatchAction(action: UIActions & { value?: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
-            this.services.dispatchAction(action, asAction, forceTimeout);
+        public sendAction(action: UIActions & { value?: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
+            this.services.sendAction(action, asAction, forceTimeout);
         }
 
-        public dispatchActionWith(actionType: string, payload: any, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
-            this.services.dispatchAction({ type: actionType, payload }, asAction, forceTimeout);
+        public sendActionWith(actionType: string, payload: any, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
+            this.services.sendAction({ type: actionType, payload }, asAction, forceTimeout);
         }
 
 
         // - Questions - //
 
-        public dispatchQuestion(question: UIQuestion, defaultValue?: any): any {
+        public askQuestion(question: UIQuestion, defaultValue?: any): any {
             // Prepare value and TypeScript transformation.
             if (question.value === undefined)
                 question.value = defaultValue;
             // For logging.
-            this.services.dispatchQuestion(question, 1);
+            this.services.askQuestion(question, 1);
             return question.value;
         }
-        public dispatchQuestionWith(type: string, payload?: any | null, defaultValue?: any): any {
+        public askQuestionWith(type: string, payload?: any | null, defaultValue?: any): any {
             // Create question.
             const question = {
                 type,
                 payload,
                 value: defaultValue
             };
-            this.services.dispatchQuestion(question, 1);
+            this.services.askQuestion(question, 1);
             return question.value;
         }
 
-        public dispatchQuestionary(question: UIQuestionary, maxAnswers: number = 0): any[] {
+        public askQuestionary(question: UIQuestionary, maxAnswers: number = 0): any[] {
             // Prepare values and TypeScript transformation.
             question.values = [];
-            this.services.dispatchQuestion(question, maxAnswers);
+            this.services.askQuestion(question, maxAnswers);
             return question.values;
         }
-        public dispatchQuestionaryWith(type: string, payload?: any | null, maxAnswers: number = 0): any[] {
+        public askQuestionaryWith(type: string, payload?: any | null, maxAnswers: number = 0): any[] {
             // Create.
             const question = {
                 type,
@@ -209,7 +203,7 @@ function _UIContextMixin(Base: ClassType) {
                 values: []
             };
             // For logging.
-            this.services.dispatchQuestion(question, maxAnswers);
+            this.services.askQuestion(question, maxAnswers);
             return question.values;
         }
 
@@ -221,7 +215,7 @@ function _UIContextMixin(Base: ClassType) {
             this.data = extend && this.data && (this.data as any).constructor === Object ? { ...this.data as object, ...data as object } : data;
             // Refresh.
             if (refresh)
-                this.refreshBy(true, forceTimeout);
+                this.refresh(true, forceTimeout);
         }
 
         public setInData(dataKey: string, subData: any, extend: boolean = false, refresh: boolean = true, forceTimeout?: number | null): void {
@@ -248,7 +242,7 @@ function _UIContextMixin(Base: ClassType) {
                 data[lastKey] = subData;
             // Refresh.
             if (refresh)
-                this.refreshBy(dataKey, forceTimeout);
+                this.refresh(dataKey, forceTimeout);
         }
 
 
@@ -269,21 +263,12 @@ function _UIContextMixin(Base: ClassType) {
         }
 
 
-        // - Refresh - //
+        // - Refresh data and any pending actions - //
 
-        /** Method to refresh by adding the given keys. */
-        public refreshBy(refreshKeys: boolean | string | string[] = true, forceTimeout?: number | null): void {
+        public refresh(refreshKeys?: boolean | string | string[], forceTimeout?: number | null): void {
             if (refreshKeys)
                 this.services.addRefreshKeys(refreshKeys);
-            this.services.refresh(this.settings.refreshTimeout, forceTimeout);
-        }
-
-        /** This refreshes both: context & pending actions.
-         * - The refresh flows down the tree, and for each matching boundary, calls the action first and then checks context.
-         * - Note that if the live component was interested in the context, will use the .addToUpdates flow - so there might be a timeout before gets actually applied.
-         * - Note that if !!refreshKeys is false, then will not add any refreshKeys. If there were none, will only update actions. */
-        public refresh(forceTimeout?: number | null): void {
-            this.services.refresh(this.settings.refreshTimeout, forceTimeout);
+            this.services.applyRefresh(this.settings.refreshTimeout, forceTimeout);
         }
 
     }
@@ -297,22 +282,24 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     // - Construct - //
 
     // Collections.
-    /** The roots where this context is inserted.
+    /** Contains the TreeNodes where this context is inserted as keys and values is the name is inserted as.
      * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-    roots: Map<UITreeNodeContexts, string>;
+    inTree: Map<UITreeNodeContexts, Set<string>>;
     /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
     dataBoundaries: Map<UILiveSource, Set<string>>;
     /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
     actionBoundaries: Map<UILiveSource, Set<string>>;
-    /** Any external data listeners - called after the live components. */
+    /** External data listeners - called after the live components. The keys are data listener callbacks, and values are interests. */
     dataListeners: Map<UIUponData<UIContext<Data, Actions>>, Set<string> | true>;
-    /** Any external action listeners - called after the live components. */
+    /** External action listeners - called after the live components. The keys are action listener / question answer callbacks, and values are action interests. */
     actionListeners: Map<UIUponAction<UIContext<Data, Actions>> | UIUponQuestion<UIContext<Data, Actions>>, Set<string> | true>;
-    /** Any external action pre-listeners: called immediately when action dispatched.
-     * - Return true to make the action be triggered after update and render (within each uiHost).
-     * - Return false to cancel dispatching the action (after pre-listeners).
-     * - Otherwise will dispatch the action normally upon refreshing the context.
-     * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
+    /** External action pre-handlers: called immediately when action sent.
+     * - Can return what to do for actions - for questions, the return value is ignored: they are always asked.
+     *     1. Return "cancel" to cancel sending the action (after pre-listeners).
+     *     2. Return "post" to make the action be triggered after update and render (within each uiHost).
+     *     3. Return "quick" to make the action be triggered immediately after pre-handling.
+     * - If many returned things to do, the order of importance is: "cancel" > "post" > "quick".
+     * - Otherwise will send the action normally upon refreshing the context. */
     actionHandlers: Map<UIUponPreAction<UIContext<Data, Actions>>, Set<string> | true>;
 
     // Data.
@@ -320,7 +307,7 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
 
     // Settings.
     settings: {
-        /** Set of action types that should always be dispatched after the update-n-render cycle.
+        /** Set of action types that should always be sent after the update-n-render cycle.
          * If overlaps with quickActions, will be interpreted as a post action.*/
         postActions: null | Set<Actions["type"] & string>;
         /** Set of action types that should always be run immediately.
@@ -328,8 +315,11 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
          * - Note that if overlaps with postActions, will be treated as a post action. */
         quickActions: true | null | Set<Actions["type"] & string>;
         /** Timeout for refreshing for this particular context.
-         * - The timeout is used for both: actions & data refreshes.
-         * - If null, then synchronous - defaults to 0ms. */
+         * - The timeout is used for both: data refresh and (normal) actions.
+         * - If null, then synchronous - defaults to 0ms.
+         * - Note that if you use null, the updates will run synchronously.
+         *   .. It's not recommended to use it, because you'd have to make sure you always use it in that sense.
+         *   .. For example, the component you called from might have already unmounted on the next line (especially if host is fully synchronous, too). */
         refreshTimeout: number | null;
     };
 
@@ -337,11 +327,13 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
      * They are the semi-private internal part of UIContext, so separated into its own class. */
     services: UIContextServices;
 
+
     // - Settings - //
 
-    modifySettings<ActionTypes extends Actions["type"] & string>(settings: { postActions?: null | ActionTypes | ActionTypes[] | Set<ActionTypes>; quickActions?: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>, refreshTimeout?: null | number; }): void;
-    addAsPostActions<ActionTypes extends Actions["type"] & string>(actionTypes: null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
-    addAsQuickActions<ActionTypes extends Actions["type"] & string>(actionTypes: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
+    modifySettings(settings: UIContextSettingsUpdate<Actions["type"] & string>): void;
+    flagPostActions<ActionTypes extends Actions["type"] & string>(actionTypes: null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
+    flagQuickActions<ActionTypes extends Actions["type"] & string>(actionTypes: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
+
 
     // - Listeners - //
 
@@ -359,43 +351,52 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     /** Remove an data listener. */
     removeDataListener(listener: UIUponData): void;
 
-    // - Dispatch actions - //
 
-    /** Dispatches the given action through the context by default timeout.
+    // - Send actions - //
+
+    /** Sends the given action through the context by default timeout.
      * - Before the action goes further, any actionHandlers can cancel it or mark it as a post action (= happens after update-n-render cycle).
      * - If asPostAction given, will ignore what .postActions and .actionHandlers would say about whether is postAction or not.
      * - Note that this should not be used for questions. */
-    dispatchAction(action: Actions & { value?: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
+    sendAction(action: Actions & { value?: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
 
-    /** Creates an action and dispatches it through the context by default timeout.
+    /** Creates an action and sends it through the context by default timeout.
      * - Before the action goes further, any actionHandlers can cancel it or mark it as a post action (= happens after update-n-render cycle).
      * - If asPostAction given, will ignore what .postActions and .actionHandlers would say about whether is postAction or not.
      * - Note that this should not be used for questions. */
-    dispatchActionWith<Type extends Actions["type"], Action extends Actions & { type: Type; } & { value: never; }>(actionType: Type, payload: Action["payload"], asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    dispatchActionWith<Type extends (Actions & { payload?: never; } & { value: never; })["type"]>(actionType: Type, payload?: undefined | never, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
+    sendActionWith<Type extends Actions["type"], Action extends Actions & { type: Type; } & { value: never; }>(actionType: Type, payload: Action["payload"], asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
+    sendActionWith<Type extends (Actions & { payload?: never; } & { value: never; })["type"]>(actionType: Type, payload?: undefined | never, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
+
 
     // - Questions - //
 
-    /** Dispatch a question.
+    /** Ask a question.
      * - You get the answer synchronously by the return value (comes from the first answerer, then stops going further).
      * - If there's no answerers, then returns the optional defaultValue (or from question.value) - or then undefined.
-     * - Note that dispatching a question also modifies the original question by adding .value into it with the collected answer. */
-    dispatchQuestion<Action extends Actions & UIQuestion<Action["value"]>>(question: Action & { value?: Action["value"]; }, defaultValue?: Action["value"]): Action["value"];
-    /** Dispatch a question by defining it on the go. See .dispatchQuestion method for details. */
-    dispatchQuestionWith<Action extends Actions & UIQuestion<Action["value"]>>(type: Action["type"], payload: Action["payload"], defaultValue?: Action["value"]): Action["value"];
-    dispatchQuestionWith<Action extends Actions & UIQuestion<Action["value"]> & { payload?: never; }>(type: Action["type"], payload?: null, defaultValue?: Action["value"]): Action["value"];
+     * - Note that sending a question also modifies the original question by adding .value into it with the collected answer. */
+    askQuestion<Action extends Actions & UIQuestion<Action["value"]>>(question: Action & { value?: Action["value"]; }, defaultValue?: Action["value"]): Action["value"];
+    /** Ask a question by defining it on the go. See .askQuestion method for details. */
+    askQuestionWith<Action extends Actions & UIQuestion<Action["value"]>>(type: Action["type"], payload: Action["payload"], defaultValue?: Action["value"]): Action["value"];
+    askQuestionWith<Action extends Actions & UIQuestion<Action["value"]> & { payload?: never; }>(type: Action["type"], payload?: null, defaultValue?: Action["value"]): Action["value"];
 
-    /** Dispatch a questionary (of one question with many answers) in the context.
+    /** Ask a questionary (of one question with many answers) in the context.
      * - You get the answers synchronously by the return value (comes from all the answerers).
      * - If there's no answerers, then returns an empty array.
-     * - Note that dispatching a questionary also modifies the original question by adding .value and .values into it.
+     * - Note that sending a questionary also modifies the original question by adding .value and .values into it.
      *   .. If any answered, the last answer be found as .value. (If none, .value is not added.) */
-    dispatchQuestionary<Action extends Actions & UIQuestionary<Action["value"]>>(question: Action & { value?: Action["value"]; values?: Action["value"][] }, maxAnswers?: number): Action["value"][];
-    /** Dispatch a questionary by defining it on the go. See .dispatchQuestion method for details. */
-    dispatchQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]>>(type: Action["type"], payload: Action["payload"], maxAnswers?: number): Action["value"][];
-    dispatchQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]> & { payload?: never; }>(type: Action["type"], payload?: null, maxAnswers?: number): Action["value"][];
+    askQuestionary<Action extends Actions & UIQuestionary<Action["value"]>>(question: Action & { value?: Action["value"]; values?: Action["value"][] }, maxAnswers?: number): Action["value"][];
+    /** Ask a questionary by defining it on the go. See .askQuestion method for details. */
+    askQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]>>(type: Action["type"], payload: Action["payload"], maxAnswers?: number): Action["value"][];
+    askQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]> & { payload?: never; }>(type: Action["type"], payload?: null, maxAnswers?: number): Action["value"][];
 
-    // - Set data - //
+
+    // - Get and set data - //
+
+    /** Get the whole data (directly).
+     * - If you want to use refreshes and such as designed, don't modify the data directly (do it via setData or setInData) - or then call .refreshData accordingly. */
+    getData(): Data;
+    /** Get a portion within the data using dotted string to point the location. For example: "themes.selected". */
+    getInData<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(dataKey: DataKey): PropType<Data, DataKey>;
 
     /** Set the data and refresh.
      * - Note that the extend functionality should only be used for dictionary objects. */
@@ -407,28 +408,22 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     setInData<DataKey extends string, SubData extends PropType<Data, DataKey, never>>(dataKey: DataKey, subData: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
     setInData<DataKey extends string, SubData extends PropType<Data, DataKey, never>>(dataKey: DataKey, subData: SubData, extend?: boolean | undefined, refresh?: boolean, forceTimeout?: number | null): void;
 
-    // - Get data - //
-
-    getData(): Data;
-    getInData<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(dataKey: DataKey): PropType<Data, DataKey>;
-
 
     // - Refresh - //
 
-    /** Method to refresh by adding the given keys. */
-    refreshBy<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
-
     /** This refreshes both: context & pending actions.
+     * - If refreshKeys defined, will add them - otherwise only refreshes pending.
      * - The refresh flows down the tree, and for each matching boundary, calls the action first and then checks context.
      * - Note that if the live component was interested in the context, will use the .addToUpdates flow - so there might be a timeout before gets actually applied.
      * - Note that if !!refreshKeys is false, then will not add any refreshKeys. If there were none, will only update actions. */
-    refresh(forceTimeout?: number | null): void;
+    refresh<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
+
 
     // - Optional assignable callbacks - //
 
     // Tree nodes.
     onInsertInto?(treeNode: UITreeNodeContexts, name: string): void;
-    onRemoveFrom?(treeNode: UITreeNodeContexts): void;
+    onRemoveFrom?(treeNode: UITreeNodeContexts, name: string): void;
 
     // Boundary interests.
     onDataInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
@@ -444,7 +439,7 @@ export type UIContextType<Data extends UIContextData = any, Actions extends UIAc
 }
 
 /** Create a new context. */
-export const createContext = <Data = any, Actions extends UIActions = UIActions>(data?: Data, settings?: UIContextSettingsUpdate): UIContext<Data, Actions> =>
+export const createContext = <Data = any, Actions extends UIActions = UIActions>(data?: Data, settings?: UIContextSettingsUpdate<Actions["type"] & string>): UIContext<Data, Actions> =>
     new UIContext<Data, Actions>(data, settings);
 
 /** There are two ways you can use this:

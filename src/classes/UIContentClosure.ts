@@ -118,7 +118,7 @@ export class UIContentClosure {
                             pBoundary._preUpdates.children = oldKids;
                     }
                     // No more content passing - the chain has been broken.
-                    if (!(pBoundary as UISourceBoundary).contentClosure.envelope)
+                    if (!(pBoundary as UISourceBoundary).closure.envelope)
                         break;
                 }
                 // Get next up - until the source.

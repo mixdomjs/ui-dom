@@ -179,7 +179,7 @@ export class UIContentBoundary extends UIBaseBoundary {
     //       .. And it just seems so logically safe and nice that we maintain our own _innerDef, while _outerDef comes from outside.
     //       .. Of course, we could just do this from the closure too: sourceClosure.envelope.targetDef.
     //    3. In a way, it's nice that closure just defines us and we don't have a ref for it.
-    //       .. That means, we don't need to know (from UIContentBoundary's point of view) how contentClosure works.
+    //       .. That means, we don't need to know (from UIContentBoundary's point of view) how closure works.
     //       .. However, we do have .sourceBoundary, .parentBoundary and .innerBoundaries, so in comparison seems strange.
 
 
@@ -217,7 +217,7 @@ export class UIContentBoundary extends UIBaseBoundary {
         // Assign.
         this.sourceBoundary = sourceBoundary;
         this.targetDef = targetDef;
-        this._innerDef = _Defs.newAppliedDefBy(targetDef, sourceBoundary.contentClosure);
+        this._innerDef = _Defs.newAppliedDefBy(targetDef, sourceBoundary.closure);
     }
 
     updateEnvelope(targetDef: UIDefTarget, truePassDef?: UIDefApplied | null) {
@@ -235,12 +235,12 @@ export class UISourceBoundary extends UIBaseBoundary {
 
     // - Private-like temporary states - //
 
-    /** Implies if has ever rendered yet.
+    /** If true means that has not ever rendered yet.
      * .. Needed for LiveFunctions to know if should call .onContextChange right after first render.
      * .. Because with the double render function, it's the first render call where things are initialized. */
-    _isVirgin?: true;
+    _notRendered?: true;
     /** Temporary rendering state indicator. */
-    _renderingState?: "active" | "re-updated";
+    _renderState?: "active" | "re-updated";
     /** Temporary collection of preUpdates - as the update data are always executed immediately. */
     _preUpdates?: UILiveNewUpdates;
 
@@ -275,8 +275,8 @@ export class UISourceBoundary extends UIBaseBoundary {
 
     // - Boundary, closure & children - //
 
-    /** Has a contentClosure if there were any content passed to us. */
-    contentClosure: UIContentClosure;
+    /** Has a closure if there were any content passed to us. */
+    closure: UIContentClosure;
 
 
 
@@ -285,10 +285,10 @@ export class UISourceBoundary extends UIBaseBoundary {
     constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: UITreeNode, sourceBoundary?: UISourceBoundary) {
         // Init.
         super(uiHost, outerDef, baseTreeNode);
-        this._isVirgin = true;
+        this._notRendered = true;
         this.uiId = uiHost.services.createBoundaryId();
         this.sourceBoundary = sourceBoundary || null;
-        this.contentClosure = new UIContentClosure(this, sourceBoundary);
+        this.closure = new UIContentClosure(this, sourceBoundary);
         this.reattach(false);
     }
 
@@ -336,14 +336,14 @@ export class UISourceBoundary extends UIBaseBoundary {
                     this.type = "class-wired";
                     const Wired = tag as UIWiredType;
                     this.mini = new Wired(this._outerDef.props);
-                    Wired.instanced.add(this);
+                    Wired.boundaries.add(this);
                     if (Wired.wiredDidMount)
                         Wired.wiredDidMount(this.mini as UIWired, this);
                     break;
             }
             // Prepare for contentApi.
             const readChildren = this.live || this.mini ? (shallowCopy: boolean = true): UIDefTarget[] | null => {
-                const defs = this.contentClosure.envelope?.targetDef.childDefs || null;
+                const defs = this.closure.envelope?.targetDef.childDefs || null;
                 return defs && (shallowCopy ? defs.slice() : defs);
             } : null;
             // For live.
@@ -367,17 +367,17 @@ export class UISourceBoundary extends UIBaseBoundary {
     // - Update & render - //
 
     update(forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null) {
-        this.uiHost.services.addToUpdates(this, { force: !this.isMounted ? "all" : forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
+        this.uiHost.services.absorbUpdates(this, { force: !this.isMounted ? "all" : forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
     }
 
     updateBy(updates: UILiveNewUpdates, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null) {
-        this.uiHost.services.addToUpdates(this, { ...updates, force: !this.isMounted ? "all" : forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
+        this.uiHost.services.absorbUpdates(this, { ...updates, force: !this.isMounted ? "all" : forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
     }
 
     render(iRecursion: number = 0): UIRenderOutput {
         // Rendering state.
         if (!iRecursion)
-            this._renderingState = "active";
+            this._renderState = "active";
         // Remove temporary children needs marker.
         if (this.contentApi && this.contentApi.childrenNeeds === "temp")
             delete this.contentApi.childrenNeeds;
@@ -401,8 +401,8 @@ export class UISourceBoundary extends UIBaseBoundary {
         // Run context updates (and other similar that have been executed before could declare the callback).
         // .. This feature is only for Live Functions - because their initializer is run on first render call. (Note for MiniFuncs as they have no context.)
         // .. For class components, they are either already defined by the class or then at constructor. (In either case, early enough.)
-        if (this._isVirgin) {
-            delete this._isVirgin;
+        if (this._notRendered) {
+            delete this._notRendered;
             const live: UILive<{}, {}, {}, {[name: string]: UIContext }> | undefined = this.live;
             if (live && live.onContextChange && live.render.length > 1) {
                 const allContexts = live.getContexts();
@@ -411,11 +411,11 @@ export class UISourceBoundary extends UIBaseBoundary {
             }
         }
         // Run again and return the new ones instead.
-        if (this._renderingState === "re-updated") {
+        if (this._renderState === "re-updated") {
             const nMax = this.uiHost.settings.maxReRenders;
             if (nMax < 0 || iRecursion < nMax) {
                 iRecursion++;
-                this._renderingState = "active";
+                this._renderState = "active";
                 return this.render(iRecursion);
             }
             // - DEVLOG - //
@@ -429,14 +429,14 @@ export class UISourceBoundary extends UIBaseBoundary {
             }
         }
         // Finish up.
-        delete this._renderingState;
+        delete this._renderState;
         // Return content.
         return content;
     }
 
 }
 
-export interface UILiveSource<AllContexts extends UIAllContexts = {}, ContextData extends Dictionary = {}> extends UISourceBoundary {
-    contextApi: UIContextApi<AllContexts, ContextData>;
-    live: UILive<{}, {}, ContextData, AllContexts, {}>;
+export interface UILiveSource<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}> extends UISourceBoundary {
+    contextApi: UIContextApi<AllContexts, Remote>;
+    live: UILive<{}, {}, Remote, AllContexts, {}>;
 }

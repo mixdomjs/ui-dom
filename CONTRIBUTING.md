@@ -55,6 +55,10 @@ Thank you for considering contributing to uiDom. It's an open source library and
 
 ## Contributing by code guidelines
 
+### Where
+
+- Use the GitHub repo:  https://github.com/ui-dom/ui-dom.git
+
 ### TypeScript
 
 - All code should be written in TypeScript.

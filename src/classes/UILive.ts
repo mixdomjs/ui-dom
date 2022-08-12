@@ -24,7 +24,6 @@ import {
     UIUpdateCompareModesBy,
     UIContextAttach,
     UIContextData,
-    NestedPaths,
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { _Apply } from "../static/_Apply";
@@ -36,7 +35,7 @@ import { UIContext } from "./UIContext";
 
 // - UILive base mixin - //
 
-function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = {}, ContextData extends Dictionary = {}, AllContexts extends UIAllContexts = {}>(Base: ClassType) {
+function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}>(Base: ClassType) {
 
     return class _UILive extends Base {
 
@@ -48,7 +47,7 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         // Props, state & context.
         public readonly props: Props;
         public state: State;
-        public context: ContextData;
+        public remote: Remote;
 
         // Internal but public.
         public readonly wired: Set<UIWiredType> | null;
@@ -72,7 +71,8 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             this.wired = null;
             // Note.
             // - _timers will be assigned if used.
-            // - State is applied by the extending class.
+            // - If used, State is applied extenrally - by the extending class or on the initializing closure for functional.
+            // - If sets needs for context data, Remote is built before rendering (or immediately if on the initializing closure for functional).
             // - The .boundary is applied externally right after. We just want to keep the constructor very React like.
         }
 
@@ -80,7 +80,7 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         // - Updating - //
 
         public update(forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
-            this.boundary.uiHost.services.addToUpdates(this.boundary, { force: forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
+            this.boundary.uiHost.services.absorbUpdates(this.boundary, { force: forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
         }
 
         public setState(newState: Pick<State, keyof State> | State, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
@@ -143,7 +143,6 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // - Getters - //
 
-
         public isMounted(): boolean {
             return this.boundary.isMounted === true;
         }
@@ -191,99 +190,106 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // - Contextual - //
 
-        // Needs in contexts.
+        // Needs in contexts (data and actions).
 
-        public needsContext(contextName: AllContexts & string, needs: boolean | any | any[] = true, refresh: boolean = true): void {
-            this.boundary.contextApi.needsContext(contextName, needs, refresh);
+        public needsData(contextName: AllContexts & string, needs?: boolean | any | any[], refresh?: boolean): boolean {
+            return this.boundary.contextApi.needsData(contextName, needs, refresh);
         }
 
-        public needsContexts(...names: (keyof AllContexts & string | Record<keyof AllContexts & string, boolean | string | string[]>)[]): void {
-            // Clean the arguments into a clean collection.
-            const needs: Record<string, boolean | string | string[]> = {};
-            for (const nameOrRec of names) {
-                if (typeof nameOrRec === "string")
-                    needs[nameOrRec] = true;
-                else
-                    for (const name in nameOrRec)
-                        needs[name] = nameOrRec[name];
-            }
-            // Set needs - even if needs are empty.
-            this.boundary.contextApi.needsContexts(needs);
+        public needsDataBy(namedNeeds: Record<keyof AllContexts & string, boolean | string | string[]>, extend?: boolean, refresh?: boolean): boolean {
+            return this.boundary.contextApi.needsDataBy(namedNeeds, extend, refresh);
         }
 
         public needsAction(contextName: AllContexts & string, actionType: string, needs?: boolean): void {
             this.boundary.contextApi.needsAction(contextName, actionType, needs);
         }
-        public needsActions(contextName: AllContexts & string, actionTypes: string[] | boolean = [], extend?: boolean): void {
+
+        public needsActions(contextName: AllContexts & string, actionTypes: boolean | string[] = [], extend?: boolean): void {
             this.boundary.contextApi.needsActions(contextName, actionTypes as string[] | boolean, extend);
         }
 
-        // Do stuff with contexts.
+        public needsActionsBy(namedNeeds: Record<keyof AllContexts & string, boolean | string[]>, extendWithinContext?: boolean, extendForAll?: boolean): void {
+            this.boundary.contextApi.needsActionsBy(namedNeeds, extendWithinContext, extendForAll);
+        }
 
-        public setContextData(contextName: keyof AllContexts & string, data: any, extend: boolean = false, refresh: boolean = true, forceTimeout?: number | null): void {
+        // Do stuff with context data.
+
+        public setData(contextName: keyof AllContexts & string, data: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void {
             const context = this.boundary.contextApi.getContext(contextName);
             if (context)
                 context.setData(data, extend, refresh, forceTimeout);
         }
 
-        public setInContextData(contextName: keyof AllContexts & string, dataKey: string, data: any, extend: boolean = false, refresh: boolean = true, forceTimeout?: number | null): void {
+        public setInData(contextName: keyof AllContexts & string, dataKey: string, data: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void {
             const context = this.boundary.contextApi.getContext(contextName);
             if (context)
                 context.setInData(dataKey, data as never, extend, refresh, forceTimeout);
         }
 
-        public getContextData(contextName: keyof AllContexts & string, noContextFallback: any = undefined): any {
+        public getData(contextName: keyof AllContexts & string, noContextFallback: any = undefined): any {
             const context = this.boundary.contextApi.getContext(contextName);
             return context ? context.data : noContextFallback;
         }
 
-        public getInContextData(contextName: keyof AllContexts & string, dataKey: string, noContextFallback: any = undefined): any {
+        public getInData(contextName: keyof AllContexts & string, dataKey: string, noContextFallback: any = undefined): any {
             const context = this.boundary.contextApi.getContext(contextName);
             return context ? context.getInData(dataKey as never) : noContextFallback;
         }
 
-        public refreshInContext(contextName: keyof AllContexts & string, refreshKeys: boolean | string | string[] = true, forceTimeout?: number | null): void {
+        public refreshData(contextName: keyof AllContexts & string, refreshKeys?: boolean | string | string[], forceTimeout?: number | null): void {
             const context = this.boundary.contextApi.getContext(contextName);
             if (context)
-                context.refreshBy(refreshKeys as never, forceTimeout);
+                context.refresh(refreshKeys as never, forceTimeout);
         }
 
-        public dispatchAction(contextName: keyof AllContexts & string, action: UIActions & { value?: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
+        public refreshDataBy(namedNeeds: Record<keyof AllContexts & string, boolean | string | string[]>, forceTimeout?: number | null): void {
+            const contexts = this.boundary.contextApi.getContexts(namedNeeds);
+            for (const name in contexts) {
+                const context = contexts[name];
+                if (context)
+                    context.refresh(namedNeeds[name] as never, forceTimeout);
+            }
+        }
+
+
+        // Do stuff with context actions.
+
+        public sendAction(contextName: keyof AllContexts & string, action: UIActions & { value?: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
             const context = this.boundary.contextApi.getContext(contextName);
             if (context)
-                context.dispatchAction(action, asAction, forceTimeout);
+                context.sendAction(action, asAction, forceTimeout);
         }
 
-        public dispatchActionWith(contextName: keyof AllContexts & string, actionType: string, payload: any, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
+        public sendActionWith(contextName: keyof AllContexts & string, actionType: string, payload: any, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
             const context = this.boundary.contextApi.getContext(contextName);
             if (context)
-                context.dispatchAction({ type: actionType, payload } as UIActions & { value?: never; }, asAction, forceTimeout);
+                context.sendAction({ type: actionType, payload } as UIActions & { value?: never; }, asAction, forceTimeout);
         }
 
-        public dispatchQuestion(contextName: keyof AllContexts & string, question: UIActions & UIQuestion, defaultValue?: any): any {
+        public askQuestion(contextName: keyof AllContexts & string, question: UIActions & UIQuestion, defaultValue?: any): any {
             const context = this.boundary.contextApi.getContext(contextName);
-            return context ? context.dispatchQuestion(question, defaultValue) : (defaultValue === undefined ? question.value : defaultValue);
+            return context ? context.askQuestion(question, defaultValue) : (defaultValue === undefined ? question.value : defaultValue);
         }
-        public dispatchQuestionWith(contextName: keyof AllContexts & string, type: string, payload: any, defaultValue?: any, maxAnswers: number = 0): any {
+        public askQuestionWith(contextName: keyof AllContexts & string, type: string, payload: any, defaultValue?: any, maxAnswers: number = 0): any {
             const context = this.boundary.contextApi.getContext(contextName);
-            return context ? context.dispatchQuestion({ type, payload, value: defaultValue } as UIActions & UIQuestion, maxAnswers) : [];
+            return context ? context.askQuestion({ type, payload, value: defaultValue } as UIActions & UIQuestion, maxAnswers) : [];
         }
 
-        public dispatchQuestionary(contextName: keyof AllContexts & string, question: UIActions & UIQuestionary, maxAnswers: number = 0): any[] {
+        public askQuestionary(contextName: keyof AllContexts & string, question: UIActions & UIQuestionary, maxAnswers: number = 0): any[] {
             const context = this.boundary.contextApi.getContext(contextName);
-            return context ? context.dispatchQuestionary(question, maxAnswers) : (question as UIQuestionary).values || [];
+            return context ? context.askQuestionary(question, maxAnswers) : (question as UIQuestionary).values || [];
         }
 
-        public dispatchQuestionaryWith(contextName: keyof AllContexts & string, type: string, payload: any, maxAnswers: number = 0): any[] {
+        public askQuestionaryWith(contextName: keyof AllContexts & string, type: string, payload: any, maxAnswers: number = 0): any[] {
             const context = this.boundary.contextApi.getContext(contextName);
-            return context ? context.dispatchQuestionary({ type, payload, values: [] } as UIActions & UIQuestionary, maxAnswers) : [];
+            return context ? context.askQuestionary({ type, payload, values: [] } as UIActions & UIQuestionary, maxAnswers) : [];
         }
 
 
-        // Mangle.
+        // - Mangle contexts - //
 
-        public hasContext(name: keyof AllContexts & string): boolean {
-            return !!this.boundary.contextApi.getContext(name);
+        public hasContext(name: keyof AllContexts & string, onlyTypes: UIContextAttach = UIContextAttach.All): boolean {
+            return !!this.boundary.contextApi.getContext(name, onlyTypes);
         }
 
         public getContext(name: keyof AllContexts & string, onlyTypes: UIContextAttach = UIContextAttach.All): UIContext | null | undefined {
@@ -333,22 +339,26 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         // - Assignable by extending class - //
 
         // The most important func of each component.
-        public render(): UIRenderOutput | UILiveFunction<Props, State, ContextData, AllContexts> { return uiDom.Content; }
+        public render(): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts> { return uiDom.Content; }
 
 
     }
 }
 
+/** Shortcut to go actions first. Useful for those components that rely mostly (or only) on actions and data. */
+export interface UILiveBy<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}>
+    extends UILive<Props, State, Remote, AllContexts> {}
+
 // Using an interface with the same name as the class solves the <T> problem with mixins.
-export interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, ContextData extends Dictionary = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
+export interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
 
 
     // - Members - //
 
-    // Props, state, context.
+    // Props, state, data.
     readonly props: Props;
     state: State;
-    context: ContextData;
+    remote: Remote;
 
     // Wired.
     readonly wired: Set<UIWiredType> | null;
@@ -405,59 +415,87 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     /** Use this to set the optional data refresh keys - resets the current keys for that context.
      * - There can be one or many keywords, or true to allow anything (default). If false, then removes needs.
      * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "."
-     * - By default, will mark the component to be updated if it was changed. If you intend to define multiple in a row, you can set the third parameter to false for all except the very last one. */
-    needsContext<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, needs?: boolean | DataKey | DataKey[], refresh?: boolean): void;
+     * - By default, will mark the component to be updated if it was changed. If you intend to define multiple in a row, you can set the third parameter to false for all except the very last one.
+     * - Returns boolean, whether needs changed (for custom refreshing purposes). */
+    needsData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataNeeds?: boolean | DataKey | DataKey[], refreshIfChanged?: boolean): boolean;
     /** Call this to define contextual needs alltogether.
-     * - With strings, will define true as refresh keys, with a record, uses the value in it.
-     * - This resets the situation - typically called once at start up.
-     * - Note that this will mark the component to be updated, if there were any changes in the needs. */
-    needsContexts<Name extends keyof AllContexts & string, DataKey extends NestedPaths<AllContexts[Name]["data"]>>(...names: (Name | Record<Name, boolean | DataKey | DataKey[]>)[]): void;
-    // needsContexts<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(...names: (Name | Record<Name, boolean | DataKey | DataKey[]>)[]): void;
+     * - Give a dictionary object where keys are context names and values are the needs: 1. boolean, 2. data key, 3. array of data keys.
+     *     * For example: { settings: true, navigation: ["page", "doc"] }
+     *     * Note that with TypeScript you must add `as const` after each array, eg. `["page", "doc"] as const`
+     * - By default will extend the context needs and so only replaces the needs for the contexts found in the new info - others are unaffected. If extend is false, resets the situation as a whole.
+     * - Note that this will mark the component to be updated, if there were any changes in the needs. If you don't want this put the (3rd) refresh argument to false.
+     *     * Note that if was already updating (eg. called during rendering), will not trigger a new update - just immediately marks the needs and tells the related contexts if status changed (is interested or not).
+     * - Returns boolean, whether needs changed (for custom refreshing purposes). */
+    needsDataBy<
+        All extends {
+            [Name in keyof AllContexts]:
+                All[Name] extends boolean ? boolean :
+                All[Name] extends string ? PropType<AllContexts[Name]["data"], All[Name], never> extends never ? never : string:
+                All[Name] extends string[] | readonly string[] ? unknown extends PropType<AllContexts[Name]["data"], All[Name][number]> ? never : string[] | readonly string[] :
+                never
+        }
+    >(namedNeeds: Partial<All>, extend?: boolean, refreshIfChanged?: boolean): boolean;
     /** Call to define depencies on a single action.
-     * If needs is false, then removes the need for this action - undefined or true adds.
-     * Note that you should also assign the callback for uponAction or uponQuestion for questions. */
+     * - If needs is false, then removes the need for this action - undefined or true adds.
+     * - Note that you should also assign the callback for uponAction or uponQuestion for questions. */
     needsAction<Name extends keyof AllContexts & string>(contextName: Name, actionType: AllContexts[Name]["Actions"]["type"] & string, needs?: boolean): void;
     /** Call to define depencies on multiple actions.
-     * If extend is true, extends the previously set needs - otherwise (by default) resets the needs to the given.
-     * Note that you should also assign the callbacks for uponAction and/or uponQuestion. */
+     * - By default extend is true, and so extends the previously set needs - if extend is false, resets the needs to the given.
+     * - Note that you should also assign the callbacks for uponAction and/or uponQuestion. */
     needsActions<Name extends keyof AllContexts & string>(contextName: Name, actionTypes: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean, extend?: boolean): void;
+    /** Set action needs for multiple contexts in one go. It's like multiple needsActions calls as a dictionary: `{ [ctxName]: boolean | actionTypes[]; }`
+     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds.
+     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context. */
+    needsActionsBy<All extends { [Name in keyof AllContexts]: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean }>(namedNeeds: All, extend?: boolean): void;
 
     // Do stuff.
     /** Set the whole data of the context, and trigger refresh (by default). If the data is an object, can also extend. */
-    setContextData<Name extends keyof AllContexts & string>(contextName: Name, data: Partial<AllContexts[Name]["data"]> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
-    setContextData<Name extends keyof AllContexts & string>(contextName: Name, data: AllContexts[Name]["data"], extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
+    setData<Name extends keyof AllContexts & string>(contextName: Name, data: Partial<AllContexts[Name]["data"]> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
+    setData<Name extends keyof AllContexts & string>(contextName: Name, data: AllContexts[Name]["data"], extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Set a portion of data inside the context data, and trigger refresh (by default). If the sub data is an object, can also extend.
      * Use the dataKey to define the location as a dotted string. For example: themes.selected */
-    setInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
-    setInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: SubData, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
+    setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
+    setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: SubData, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Get the whole context data (directly). */
-    getContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData | undefined>(contextName: Name, noContextFallback?: never | undefined): CtxData | undefined;
-    getContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData>(contextName: Name, noContextFallback: FallbackData): CtxData;
+    getData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData | undefined>(contextName: Name, noContextFallback?: never | undefined): CtxData | undefined;
+    getData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData>(contextName: Name, noContextFallback: FallbackData): CtxData;
     /** Get a portion of data inside the context data (directly).
      * Use the dataKey to define the location as a dotted string. For example: "themes.selected" */
-    getInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataKey: DataKey, noContextFallback?: never | undefined): PropType<CtxData, DataKey> | undefined;
-    getInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string, SubData extends PropType<CtxData, DataKey>, FallbackData extends SubData>(contextName: Name, dataKey: DataKey, noContextFallback: FallbackData): SubData;
+    getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataKey: DataKey, noContextFallback?: never | undefined): PropType<CtxData, DataKey> | undefined;
+    getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string, SubData extends PropType<CtxData, DataKey>, FallbackData extends SubData>(contextName: Name, dataKey: DataKey, noContextFallback: FallbackData): SubData;
     /** Manually trigger refresh for dataKeys in the context.
      * Use the refreshKeys to define the location as a dotted string or an array of dotted strings. For example: ["themes.selected", "preferences"] */
-    refreshInContext<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
-    /** Dispatch an action in the context. */
-    dispatchAction<Name extends keyof AllContexts & string>(contextName: Name, action: AllContexts[Name]["Actions"] & { value: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    /** Dispatch an action within the context by declaring it on the go with type and payload. */
-    dispatchActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & { value: never; }, Type extends Actions["type"], Action extends Actions & { type: Type; }>(contextName: Name, actionType: Type, payload: Action["payload"], asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    dispatchActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & { value: never; }, Type extends (Actions & { payload?: never; })["type"]>(contextName: Name, actionType: Type, payload?: undefined, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    /** Dispatch a question in the context.
+    refreshData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
+    /** Manually trigger refresh for dataKeys for multiple contexts. (Also see refreshData above.)
+     * - The keys are context names and values define the refresh: boolean | DataKey | DataKey[]. */
+    refreshDataBy<
+        All extends {
+            [Name in keyof AllContexts]:
+                All[Name] extends boolean ? boolean :
+                All[Name] extends string ? PropType<AllContexts[Name]["data"], All[Name], never> extends never ? never : string:
+                All[Name] extends string[] | readonly string[] ? unknown extends PropType<AllContexts[Name]["data"], All[Name][number]> ? never : string[] | readonly string[] :
+                never
+        }
+    >(namedRefreshes: Partial<All>, forceTimeout?: number | null): void;
+    /** Send an action in the context. */
+    sendAction<Name extends keyof AllContexts & string>(contextName: Name, action: AllContexts[Name]["Actions"] & { value: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
+    /** Send an action within the context by declaring it on the go with type and payload. */
+    sendActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & { value: never; }, Type extends Actions["type"], Action extends Actions & { type: Type; }>(contextName: Name, actionType: Type, payload: Action["payload"], asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
+    sendActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & { value: never; }, Type extends (Actions & { payload?: never; })["type"]>(contextName: Name, actionType: Type, payload?: undefined, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
+    /** Ask a question in the context.
      * - You get the answer synchronously by the return value (comes from the first answerer, then stops going further).
      * - If there's no answerers, or no context found, then returns the optional defaultValue (or from question.value) - or then undefined.
-     * - Note that dispatching a question also modifies the original question by adding .value into it with the collected answer. */
-    dispatchQuestion<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & { value?: Action["value"]; }, value?: Action["value"]): Action["value"] | undefined;
-    /** Dispatch a questionary (of one question with many answers) in the context.
+     * - Note that asking a question also modifies the original question by adding .value into it with the collected answer. */
+    askQuestion<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & { value?: Action["value"]; }, value?: Action["value"]): Action["value"] | undefined;
+    /** Ask a questionary (of one question with many answers) in the context.
      * - You get the answers synchronously by the return value (comes from all the answerers).
      * - If there's no answerers, or no context found, then returns an empty array.
-     * - Note that dispatching a questionary also modifies the original question by adding .value and .values into it.
+     * - Note that asking a questionary also modifies the original question by adding .value and .values into it.
      *   .. If any answered, the last answer be found as .value. (If none, .value is not added.) */
-    dispatchQuestionary<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & { value?: Action["value"]; }, maxAnswers?: number): Action["value"][];
+    askQuestionary<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & { value?: Action["value"]; }, maxAnswers?: number): Action["value"][];
 
-    // Mangle.
+    // - Mangle contexts - //
+
     /** Check quickly whether has context or not. Rarely needed - uses .getContext internally. */
     hasContext<Name extends keyof AllContexts & string>(name: Name): boolean;
     /** Gets the context locally by name.
@@ -465,10 +503,9 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
      * - If includeTunnels is set to false, skips contexts assigned by tunneling (overrideContext call or by attachTunnels prop).
      * - This is mainly useful, when wanting to send actions from within the component - or perhaps in some special circumstances. */
     getContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): AllContexts[Name] | null | undefined;
-    /** Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names.
-     *  UIContextAttach are:
+    /** Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
      *  - Cascading (1): Outer contexts.
-     *  - Attached (2): Attached tunnels.
+     *  - Parent (2): Attached by parent.
      *  - Overridden (4): Locally overridden. */
     getContexts<Name extends keyof AllContexts & string>(onlyNames?: RecordableType<Name> | null, onlyTypes?: UIContextAttach): Partial<Record<Name, AllContexts[Name] | null>>;
     /** Override context for this component only without affecting the cascading context flow.
@@ -513,16 +550,16 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 
     // The render method.
     /** The most important function of a UILive: the render output function. */
-    render(props: Props, ui: ThisType<this>): UIRenderOutput | UILiveFunction<Props, State, ContextData, AllContexts>;
-    render(): UIRenderOutput | UILiveFunction<Props, State, ContextData, AllContexts>;
+    render(props: Props, ui: ThisType<this>): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
+    render(): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
 
     // Contextual executors.
-    /** Override this to listen to actions - originated by dispatchAction call on the context. */
+    /** Override this to listen to actions - originated by sendAction call on the context. */
     uponAction?<Name extends keyof AllContexts & string, Context extends AllContexts[Name]>(action: Context["Actions"], context: Context, name: Name): void;
-    /** Override this to answer to questions - asked by dispatchQuestion call on the context. */
+    /** Override this to answer to questions - asked by askQuestion call on the context. */
     uponQuestion?<Name extends keyof AllContexts & string, Context extends AllContexts[Name], Action extends Context["Actions"] & UIQuestion<Action["value"]>>(action: Action, context: Context, name: Name): Action["value"];
     /** Override this with the actual method to build the context for this particular component. */
-    buildContext?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): ContextData;
+    buildRemote?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): Remote;
     onContextChange?<Name extends keyof AllContexts & string>(name: Name, newContext: AllContexts[Name] | null, oldContext: AllContexts[Name] | null): boolean | null;
 
     // Component life cycle.
@@ -530,34 +567,49 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
      * - Note that this is not called on mount, but will be called everytime on update, even if will not actually update (use the 3rd param).
      * - Note that this will be called after uiShouldUpdate (if that is called) and right before the update happens.
      * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
-    uiBeforeUpdate?(preUpdates: UILiveUpdates<Props, State, ContextData>, newUpdates: UILiveUpdates<Props, State, ContextData>, willUpdate: boolean): void;
+    uiBeforeUpdate?(preUpdates: UILiveUpdates<Props, State, Remote>, newUpdates: UILiveUpdates<Props, State, Remote>, willUpdate: boolean): void;
     /** Callback to determine whether should update or not.
      * - If returns true, component will update. If false, will not.
      * - If returns null (or no uiShouldUpdate method assigned), will use the rendering settings to determine.
      * - Note that this is not called every time necessarily (never on mount, and not if was forced).
      * - Note that this is called right before uiBeforeUpdate and the actual update (if that happens).
      * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
-    uiShouldUpdate?(preUpdates: UILiveUpdates<Props, State, ContextData>, newUpdates: UILiveUpdates<Props, State, ContextData>): boolean | null;
+    uiShouldUpdate?(preUpdates: UILiveUpdates<Props, State, Remote>, newUpdates: UILiveUpdates<Props, State, Remote>): boolean | null;
     uiDidMount?(): void;
     uiDidMove?(): void;
-    uiDidUpdate?(preUpdates: UILiveUpdates<Props, State, ContextData>, newUpdates: UILiveUpdates<Props, State, ContextData>): void;
+    uiDidUpdate?(preUpdates: UILiveUpdates<Props, State, Remote>, newUpdates: UILiveUpdates<Props, State, Remote>): void;
     uiWillUnmount?(): void;
 
 }
-
 
 // - The class and create shortcut - //
 
 // The declaration of this has some problems: many nevers.
 // .. We don't really need the declaration for this class. Can it be avoided somehow?
-export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, ContextData extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
+export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
     // We need a constructor here for typescript TSX.
     constructor(props: Props, ...args: any[]) {
         super(props, ...args);
     }
 }
-export const createLive = <Props extends Dictionary = {}, State extends Dictionary = {}, Context extends Dictionary = {}, AllContexts extends UIAllContexts = {}>( func: (q: UILive<Props, State, Context, AllContexts>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Context, AllContexts>) =>
-    ((props, ui) => func(ui, props)) as UILiveFunction<Props, State, Context, AllContexts>;
+/** Create a UILive functional component. */
+export const createLive = <
+    Props extends Dictionary = {},
+    State extends Dictionary = {},
+    Remote extends Dictionary = {},
+    AllContexts extends UIAllContexts = {}
+>( func: (q: UILive<Props, State, Remote, AllContexts>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) =>
+    ((props, ui) => func(ui, props)) as UILiveFunction<Props, State, Remote, AllContexts>;
+
+/** Create a UILive functional component.
+ * - This is only for TypeScript purposes to give the contexts first (for actions), then remote data from contexts, and then props and state. */
+export const createLiveBy = <
+    AllContexts extends UIAllContexts = {},
+    Remote extends Dictionary = {},
+    Props extends Dictionary = {},
+    State extends Dictionary = {}
+>( func: (q: UILive<Props, State, Remote, AllContexts>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) =>
+    ((props, ui) => func(ui, props)) as UILiveFunction<Props, State, Remote, AllContexts>;
 
 
 // - The exported mixer - //
@@ -569,3 +621,36 @@ export const createLive = <Props extends Dictionary = {}, State extends Dictiona
  *      * For example: `class MyMix extends (UILiveMixin as ClassBaseMixer<UILive<MyProps>>)(MyBase) {}`
  */
 export const UILiveMixin = _UILiveMixin as ClassBaseMixer<UILive>;
+
+
+// // - Testing non-heavy typing for .needsDataBy method - //
+//
+// type AllMyContexts = {
+//     settings: UIContext<{ themes: { selected: "light" | "dark"; }; }>;
+//     navigation: UIContext<{ page: string; }>;
+// };
+// const Test = createLiveBy<AllMyContexts>(live => {
+//
+//     // Each works correctly - just needs the `as const` for each array.
+//     // .. However, weighed against allowing UILive to be non-heavy for extended use: it's well worth it.
+//     live.needsDataBy({settings: "themes"});
+//     live.needsDataBy({settings: "themes", navigation: "page"});
+//     live.needsDataBy({settings: "themes", navigation: ["page"] as const});
+//     live.needsDataBy({settings: ["themes"] as const});
+//     live.needsDataBy({settings: ["themes"] as const, navigation: "page"});
+//     live.needsDataBy({settings: ["themes"] as const, navigation: ["page"] as const});
+//     live.needsDataBy({settings: "themes.selected"});
+//     live.needsDataBy({settings: ["themes.selected"] as const});
+//     live.needsDataBy({settings: ["themes.selected", "themes"] as const, navigation: "page"});
+//
+//     // Each fails correctly.
+//     // live.needsDataBy({settingsFAIL: "themes.selected"});
+//     // live.needsDataBy({settings: "themes.selected.FAIL"});
+//     // live.needsDataBy({settings: ["themes.FAIL"] as const});
+//     // live.needsDataBy({settings: ["themes.FAIL", "themes.FAIL_AGAIN"] as const});
+//     // live.needsDataBy({settings: ["themes.FAIL", "themes"] as const});
+//     // live.needsDataBy({settings: ["themes.selected", "themes.FAIL"] as const});
+//     // live.needsDataBy({settings: ["themes.selected", "themes"] as const, navigation: "page_FAIL"});
+//
+//     return () => null;
+// });

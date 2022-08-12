@@ -47,8 +47,10 @@ function _UIHostMixin(Base: ClassType) {
         services: UIHostServices;
 
         // State.
+        /** This is the target render definition that defines our render output. */
         targetDef: UIDefTarget | null;
-        isDisabled?: true;
+        /** Temporary value. */
+        _isDisabled?: true;
 
 
         // - Init - //
@@ -76,7 +78,7 @@ function _UIHostMixin(Base: ClassType) {
             // Create first def.
             this.targetDef = _Defs.createDefFromContent(content);
             // Create a root boundary that will render our targetDef or null if disabled.
-            const Root = () => this.isDisabled ? null : this.targetDef;
+            const Root = () => this._isDisabled ? null : this.targetDef;
             // Create base tree node for the root boundary.
             const sourceDef = _Defs.newAppliedDefBy({ _uiDefType: "boundary", tag: Root, props: {}, childDefs: [] }, null);
             const baseTreeNode: UITreeNodeBoundary = {
@@ -98,21 +100,21 @@ function _UIHostMixin(Base: ClassType) {
                 this.rootBoundary.mini.updateMode = "always";
             baseTreeNode.boundary = this.rootBoundary;
             // Run updates.
-            this.services.addToUpdates(this.rootBoundary, {});
+            this.services.absorbUpdates(this.rootBoundary, {});
         }
 
         // - Listeners - //
 
-        public addListener(type: "render" | "update", callback: () => void): void {
+        public addListener(type: "update" | "render", callback: () => void): void {
             this.services.addListener(type, callback);
         }
-        public removeListener(type: "render" | "update", callback: () => void): void {
+        public removeListener(type: "update" | "render", callback: () => void): void {
             this.services.removeListener(type, callback);
         }
 
         // - Basic api - //
 
-        public renderWith(content: UIRenderOutput, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
+        public update(content: UIRenderOutput, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
             // Create a def for the root class with given props and contents.
             // .. We have a class, so we know won't be empty.
             this.targetDef = _Defs.createDefFromContent(content);
@@ -120,7 +122,7 @@ function _UIHostMixin(Base: ClassType) {
             this.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
         }
 
-        public clearContents(update: boolean = true, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
+        public clear(update: boolean = true, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
             // Clear timers.
             this.services.clearTimers(true);
             // Clear target.
@@ -130,33 +132,15 @@ function _UIHostMixin(Base: ClassType) {
                 this.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
         }
 
-        public modifySettings(settings: UIHostSettingsUpdate) {
-            // Collect state before.
-            const onlyRunWas = this.settings.onlyRunInContainer;
-            const welcomeCtxsWas = this.settings.welcomeContextsUpRoot;
-            // Do changes.
-            UIHost.modifySettings(this.settings, settings);
-            // For special changes.
-            // .. Recheck contexts from host to host.
-            if (welcomeCtxsWas !== undefined && welcomeCtxsWas !== settings.welcomeContextsUpRoot) {
-                const pHost = this.groundedTree.parent && this.groundedTree.parent.sourceBoundary && this.groundedTree.parent.sourceBoundary.uiHost;
-                const pCtxs = pHost && this.settings.welcomeContextsUpRoot ? pHost.rootBoundary.outerContexts : {};
-                this.services.onContextPass(pCtxs);
-            }
-            // .. Run the update immediately.
-            if (settings.onlyRunInContainer !== undefined && settings.onlyRunInContainer !== onlyRunWas)
-                this.refresh(false, null, null);
-        }
-
 
         // - Refresh - //
 
         /** This is useful for refreshing the container. */
         public refresh(forceUpdate: boolean = false, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null) {
             // Update state.
-            const wasEnabled = !this.isDisabled;
+            const wasEnabled = !this._isDisabled;
             const shouldRun = !(this.settings.onlyRunInContainer && !this.groundedTree.domNode && !this.groundedTree.parent);
-            shouldRun ? delete this.isDisabled : this.isDisabled = true;
+            shouldRun ? delete this._isDisabled : this._isDisabled = true;
             // Force update: create / destroy.
             if (forceUpdate || !shouldRun || !wasEnabled)
                 this.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
@@ -165,7 +149,7 @@ function _UIHostMixin(Base: ClassType) {
                 // Get its root nodes.
                 const rHostInfos = this.rootBoundary ? this.rootBoundary.getTreeNodesForDomRoots(true).map(treeNode => ({ treeNode, move: true }) as UIDomRenderInfo) : [];
                 // Trigger render immediately - and regardless of whether had info (it's needed for a potential hosting host).
-                this.services.addToPostPending(rHostInfos, null, forceRenderTimeout);
+                this.services.absorbChanges(rHostInfos, null, forceRenderTimeout);
             }
         }
 
@@ -196,7 +180,7 @@ function _UIHostMixin(Base: ClassType) {
                 }
             }
             // Render.
-            this.services.addToPostPending(renderInfos, null, forceRenderTimeout);
+            this.services.absorbChanges(renderInfos, null, forceRenderTimeout);
         }
 
         public moveInto(parent: Node | null, forceRenderTimeout?: number | null) {
@@ -209,7 +193,25 @@ function _UIHostMixin(Base: ClassType) {
             const renderInfos = this.rootBoundary.getTreeNodesForDomRoots(true).map(treeNode => ({ treeNode, move: true }) as UIDomRenderInfo);
             // Trigger render.
             if (renderInfos[0] || (forceRenderTimeout !== undefined))
-                this.services.addToPostPending(renderInfos, null, forceRenderTimeout);
+                this.services.absorbChanges(renderInfos, null, forceRenderTimeout);
+        }
+
+        public modifySettings(settings: UIHostSettingsUpdate) {
+            // Collect state before.
+            const onlyRunWas = this.settings.onlyRunInContainer;
+            const welcomeCtxsWas = this.settings.welcomeContextsUpRoot;
+            // Do changes.
+            UIHost.modifySettings(this.settings, settings);
+            // For special changes.
+            // .. Recheck contexts from host to host.
+            if (welcomeCtxsWas !== undefined && welcomeCtxsWas !== settings.welcomeContextsUpRoot) {
+                const pHost = this.groundedTree.parent && this.groundedTree.parent.sourceBoundary && this.groundedTree.parent.sourceBoundary.uiHost;
+                const pCtxs = pHost && this.settings.welcomeContextsUpRoot ? pHost.rootBoundary.outerContexts : {};
+                this.services.onContextPass(pCtxs);
+            }
+            // .. Run the update immediately.
+            if (settings.onlyRunInContainer !== undefined && settings.onlyRunInContainer !== onlyRunWas)
+                this.refresh(false, null, null);
         }
 
 
@@ -285,7 +287,7 @@ function _UIHostMixin(Base: ClassType) {
                 updateLiveModes: {
                     props: "shallow",
                     state: "shallow",
-                    context: "shallow",
+                    remote: "shallow",
                     children: "changed"
                 },
                 preEqualCheckDomProps: true,
@@ -335,15 +337,19 @@ export interface UIHost {
 
     // State.
     targetDef: UIDefTarget | null;
-    isDisabled?: true;
+
+    // Temporary internal value (for .onlyRunInContainer setting).
+    _isDisabled?: true;
 
     // Basic methods.
-    modifySettings(settings: UIHostSettingsUpdate): void;
-    renderWith(...contents: UIRenderOutput[]): void;
-    clearContents(update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
+    addListener(type: "update" | "render", callback: () => void): void;
+    removeListener(type: "update" | "render", callback: () => void): void;
+    update(...contents: UIRenderOutput[]): void;
+    clear(update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     refresh(forceUpdate?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     refreshRender(forceDomRead?: boolean, forceRenderTimeout?: number | null): void;
     moveInto(parent: Node | null, forceRenderTimeout?: number | null): void;
+    modifySettings(settings: UIHostSettingsUpdate): void;
 
     // Getters.
     getRootDomNode(): Node | null;

@@ -170,7 +170,7 @@ export const _Apply = {
      *    - We update our appliedDef tree (half-separately from old appliedDefs) as we go, and try to reuse as much as we can.
      *    - We also create / reuse treeNodes on the go.
      *    - The finding reusables also includes handling uiDom.Content's.
-     *      .. For any (generic or keyed) uiDom.Content found, convert them into a contentPassDef and assign the contentClosure given by our hostBoundary to it (if any).
+     *      .. For any (generic or keyed) uiDom.Content found, convert them into a contentPassDef and assign the closure given by our hostBoundary to it (if any).
      *      .. Like with normal defs, try to look for a fitting contentPass (from the earlier applied contentPasses) with keys and order.
      *    - As an output, we collect toApplyPairs for the next step below.
      *
@@ -180,11 +180,11 @@ export const _Apply = {
      *    - b) For any domtag def, collect render info (the kids will be in the loop).
      *    - c) For any sub-boundary, apply the def to the sub-boundary (with targetDefs with our appliedDefs attached) collecting its render info.
      *       * .. Note. Kids will not be in the loop - we need not go any further here. (This is pre-handled in toApplyPairs.)
-     *       * .. Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to contentClosures above.
-     *       * .... This is how it should be, because these contentClosures will not be grounded by us - maybe by the nested boundary, maybe not.
+     *       * .. Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to closures above.
+     *       * .... This is how it should be, because these closures will not be grounded by us - maybe by the nested boundary, maybe not.
      *    - d) For any contentPassDef, ground them - as they are now in direct contact with the dom tag chain.
-     *       * .. This means, triggering the contentClosure found in them (originally created by our host boundary, and might go way back).
-     *       * .. So we won't go further, but we will trigger the process to go further down from here (by the contentClosure).
+     *       * .. This means, triggering the closure found in them (originally created by our host boundary, and might go way back).
+     *       * .. So we won't go further, but we will trigger the process to go further down from here (by the closure).
      * 5. Clean up old defs and their content: destroy old dom content and unused boundaries with their closures and collect render infos for all the related destruction.
      * 6. Return the render infos.
      *
@@ -202,7 +202,7 @@ export const _Apply = {
             preDef = _Defs.createDefFromContent(byBoundary.render());
             // Make sure has appliedDef for a preDef.
             if (preDef && !appliedDef)
-                appliedDef = _Defs.newAppliedDefBy(preDef, byBoundary.contentClosure);
+                appliedDef = _Defs.newAppliedDefBy(preDef, byBoundary.closure);
         }
         // For content boundary, just get the already rendered def tree.
         else
@@ -312,7 +312,7 @@ export const _Apply = {
     /** This is the core method for actually applying the meaning of defs into reality.
      * - The process includes applying dom tags into dom elements (not rendering yet) and instancing/updating sub boundaries.
      * - The array of toApplyPairs to be fed here should only include the "groundable" ones and in tree order (use .pairDefs method).
-     *   .. All the other content (= not included in toApplyPairs) gets passed on as a contentClosure by creating/updating it from .childDefs.
+     *   .. All the other content (= not included in toApplyPairs) gets passed on as a closure by creating/updating it from .childDefs.
      * - Each item in the toApplyPairs is [toDef, aDef, treeNode, outerContexts ]
      * - Importantly this collects and returns ordered renderInfos and boundaryCalls, which can be later executed.
      */
@@ -324,11 +324,11 @@ export const _Apply = {
         //    b) For any domtag def, collect render info (the kids will be in the loop).
         //    c) For any sub-boundary, apply the def to the sub-boundary (with targetDefs with our appliedDefs attached) collecting its render info.
         //       .. Note. Kids will not be in the loop - we need not go any further here. (This is pre-handled in toApplyPairs.)
-        //       .. Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to contentClosures above.
-        //       .... This is how it should be, because these contentClosures will not be grounded by us - maybe by the nested boundary, maybe not.
+        //       .. Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to closures above.
+        //       .... This is how it should be, because these closures will not be grounded by us - maybe by the nested boundary, maybe not.
         //    d) For any contentPassDef, ground them - as they are now in direct contact with the dom tag chain.
-        //       .. This means, triggering the contentClosure found in them (originally created by our host boundary, and might go way back).
-        //       .. So we won't go further, but we will trigger the process to go further down from here (by the contentClosure).
+        //       .. This means, triggering the closure found in them (originally created by our host boundary, and might go way back).
+        //       .. So we won't go further, but we will trigger the process to go further down from here (by the closure).
 
         // Apply the target defs recursively until each boundary starts (automatically limited by our toApplyPairs).
         // .. We update each def collecting render infos, and on boundaries create/update content closure and call mount/update.
@@ -353,7 +353,7 @@ export const _Apply = {
             // Detect move. (For dom tags, boundaries and passes handled separately.)
             if (!fullChange && aDef.action === "moved") {
                 switch (aDef._uiDefType) {
-                    // For clarity and robustness, boundary's move is not handled here but in updateSourceBoundary.
+                    // For clarity and robustness, boundary's move is not handled here but in .updateBoundary in UIHostServices.
                     // case "boundary":
                     case "contexts":
                     case "fragment":
@@ -490,9 +490,12 @@ export const _Apply = {
                             for (const name in aContexts) {
                                 const aCtx = aContexts[name];
                                 if (aCtx && aCtx !== (toContexts && toContexts[name] || null)) {
+                                    // Call remove.
                                     if (aCtx.onRemoveFrom)
-                                        aCtx.onRemoveFrom(treeNode as UITreeNodeContexts);
-                                    aCtx.roots.delete(treeNode as UITreeNodeContexts);
+                                        aCtx.onRemoveFrom(treeNode as UITreeNodeContexts, name);
+                                    // Do the removing - either one name or most often the whole entry.
+                                    const tNames = aCtx.inTree.get(treeNode as UITreeNodeContexts);
+                                    tNames && tNames.size > 1 ? tNames.delete(name) : aCtx.inTree.delete(treeNode as UITreeNodeContexts);
                                 }
                             }
                         }
@@ -500,9 +503,12 @@ export const _Apply = {
                         for (const name in toContexts) {
                             const toCtx = toContexts[name];
                             if (toCtx && toCtx !== (aContexts && aContexts[name] || null)) {
+                                // Call add.
                                 if (toCtx.onInsertInto)
                                     toCtx.onInsertInto(treeNode as UITreeNodeContexts, name);
-                                toCtx.roots.set(treeNode as UITreeNodeContexts, name);
+                                // Do the adding - either one name or most often the whole entry.
+                                const tNames = toCtx.inTree.get(treeNode as UITreeNodeContexts);
+                                tNames ? tNames.add(name) : toCtx.inTree.set(treeNode as UITreeNodeContexts, new Set([name]));
                             }
                         }
                         // Apply.
@@ -533,7 +539,7 @@ export const _Apply = {
                         // Check if should.
                         const move = aDef.action === "moved" && (movedNodes.indexOf(treeNode) === -1);
                         // .. Note that simpleContent never has props, so if aDef.tag === "" we never need to update (nor move, just content).
-                        const update = aDef.tag ? !domPreCheckType || ((domPreCheckType === "contextual") && (contentChanged || move)) || !_Lib.equalDomProps(propsWere || {}, toDef.props || {}) : false;
+                        const update = aDef.tag ? !domPreCheckType || ((domPreCheckType === "if-needed") && (contentChanged || move)) || !_Lib.equalDomProps(propsWere || {}, toDef.props || {}) : false;
                         // Add to rendering.
                         if (update || contentChanged || move) {
                             const info: UIDomRenderInfo = { treeNode: treeNode as UITreeNodeDom };
@@ -607,8 +613,8 @@ export const _Apply = {
             // Handle source boundary - upon creation or updating.
             // .. For any sub-boundary, apply the def to the sub-boundary (with targetDefs with our appliedDefs attached) collecting its render info.
             // .... Note. Kids will not be in the loop - we need not go any further here. (This is pre-handled in toApplyPairs.)
-            // .... Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to contentClosures above.
-            // ...... This is how it should be, because these contentClosures will not be grounded by us - maybe by the nested boundary, maybe not.
+            // .... Note that this will prevent from any uiDom.Content within from being detected in our scope - note that they were already converted to closures above.
+            // ...... This is how it should be, because these closures will not be grounded by us - maybe by the nested boundary, maybe not.
             if (treeNode.boundary) {
 
                 // - Before updating - //
@@ -625,7 +631,7 @@ export const _Apply = {
                 let newEnvelope: UIContentEnvelope | null = null;
                 if (toDef.childDefs[0]) {
                     // Create new fragment to hold the childDefs, and keep the reference for aDef.childDefs (needed for true content pass)..!
-                    const oldEnvelope = boundary.contentClosure.envelope;
+                    const oldEnvelope = boundary.closure.envelope;
                     if (!oldEnvelope) {
                         newEnvelope = {
                             appliedDef: { tag: null, _uiDefType: "fragment", childDefs: aDef.childDefs, action: "mounted" },
@@ -642,7 +648,7 @@ export const _Apply = {
                 }
                 // Do a "pre-refresh" to update the info for the update runs below.
                 // .. But we will not yet apply the content to grounded - maybe they will not be there anymore, or maybe there'll be more.
-                let bInterested = boundary.contentClosure.preRefresh(newEnvelope);
+                let bInterested = boundary.closure.preRefresh(newEnvelope);
                 const nOrigInterested = bInterested.length;
 
                 // If the context did change, let's mark it here.
@@ -696,7 +702,7 @@ export const _Apply = {
                 // - Run updates - //
 
                 // Run updates. It's done with an if-should check, but in either case it will clear the pending updates.
-                const updates = byBoundary.uiHost.services.updateSourceBoundary(boundary, forceUpdate, movedNodes, bInterested);
+                const updates = byBoundary.uiHost.services.updateBoundary(boundary, forceUpdate, movedNodes, bInterested);
                 if (updates) {
                     renderInfos = renderInfos.concat(updates[0]);
                     boundaryChanges = boundaryChanges.concat(updates[1]);
@@ -746,7 +752,7 @@ export const _Apply = {
                 // .... That is why we pre-refreshed them, so they have fresh info.
                 // .... So that if any grounds, they can ground immediately.
                 // .. But now is time to apply to any "still existing oldies" (excluding dead and newly grounded).
-                const closureInfos = boundary.contentClosure.applyRefresh(forceUpdate);
+                const closureInfos = boundary.closure.applyRefresh(forceUpdate);
                 renderInfos = renderInfos.concat(closureInfos[0]);
                 boundaryChanges = boundaryChanges.concat(closureInfos[1]);
 
@@ -762,7 +768,7 @@ export const _Apply = {
 
     /** This does the pairing for the whole render output, and prepares structure for applying defs.
      * - Returns toApplyPairs array for feeding into applyDefPairs.
-     *   .. This includes only the ones to be "grounded" - the others will be passed inside a contentClosure.
+     *   .. This includes only the ones to be "grounded" - the others will be passed inside a closure.
      * - Reuses, modifies and creates appliedDefs on the go. (Modifies properties: parent, children, treeNode.)
      * - Reuses, modifies and creates treeNodes on the go.
      */
@@ -873,7 +879,7 @@ export const _Apply = {
         const wideArrKeys: boolean = settings ? settings.wideKeysInArrays : false;
         const allowWide = wideArrKeys || !parentDef.isArray;
         if (!wideArrKeys && (parentDef.isArray != (parentAppliedDef && parentAppliedDef.isArray)))
-            return parentDef.childDefs.map(def => _Defs.newAppliedDefBy(def, sourceBoundary && sourceBoundary.contentClosure || null));
+            return parentDef.childDefs.map(def => _Defs.newAppliedDefBy(def, sourceBoundary && sourceBoundary.closure || null));
         // Get other settings.
         const reuseSiblings: boolean | "dom" | "dom-mini" = settings ? settings.reuseSiblingTags : true;
         const noValuesMode: boolean | any[] = settings ? settings.noRenderValuesMode : false;
@@ -893,7 +899,7 @@ export const _Apply = {
                 skipChild = noValuesMode === true ? !childDef.domContent : noValuesMode.indexOf(childDef.domContent) !== -1;
             // If is a fragment that requires children, skip it if there's no content to be delivered.
             else if (childDef._uiDefType === "fragment" && childDef.withContent)
-                skipChild = !sourceBoundary || !sourceBoundary.contentClosure.envelope;
+                skipChild = !sourceBoundary || !sourceBoundary.closure.envelope;
             // Skip.
             if (skipChild) {
                 parentDef.childDefs.splice(i, 1);
@@ -946,7 +952,7 @@ export const _Apply = {
             }
             // Create.
             if (!aDef)
-                aDef = _Defs.newAppliedDefBy(childDef, sourceBoundary && sourceBoundary.contentClosure || null);
+                aDef = _Defs.newAppliedDefBy(childDef, sourceBoundary && sourceBoundary.closure || null);
             // Mark whether was moved or just updated.
             else
                 aDef.action = !parentAppliedDef || parentAppliedDef.childDefs[i] !== aDef ? "moved" : "updated";
@@ -1243,10 +1249,16 @@ export const _Apply = {
                 case "contexts":
                     if (aDef.contexts) {
                         for (const name in aDef.contexts) {
+                            // Get.
                             const aCtx = aDef.contexts[name];
+                            if (!aCtx)
+                                continue;
+                            // Call remove.
                             if (aCtx.onRemoveFrom)
-                                aCtx.onRemoveFrom(treeNode as UITreeNodeContexts);
-                            aCtx.roots.delete(treeNode as UITreeNodeContexts);
+                                aCtx.onRemoveFrom(treeNode as UITreeNodeContexts, name);
+                            // Do the removing - either one name or most often the whole entry.
+                            const tNames = aCtx.inTree.get(treeNode as UITreeNodeContexts);
+                            tNames && tNames.size > 1 ? tNames.delete(name) : aCtx.inTree.delete(treeNode as UITreeNodeContexts);
                         }
                     }
                 default:
@@ -1305,7 +1317,7 @@ export const _Apply = {
                 const Wired = boundary.mini.constructor as UIWiredType;
                 if (Wired.wiredWillUnmount)
                     Wired.wiredWillUnmount(boundary.mini, boundary);
-                Wired.instanced.delete(boundary);
+                Wired.boundaries.delete(boundary);
             }
             // Add root removals for rendering info.
             const domUnmounts: UITreeNode[] = destroyDom ? boundary.getTreeNodesForDomRoots(false) : []; // <-- shouldn't we get nested..? No but we are in a loop.. okay..
@@ -1369,7 +1381,7 @@ export const _Apply = {
             }
             // Remove from updates, if was there.
             if (sBoundary)
-                sBoundary.uiHost.services.removeFromUpdates(sBoundary);
+                sBoundary.uiHost.services.cancelUpdates(sBoundary);
             // Collect render infos - we collect them in tree order for correct salvaging behaviour.
             // .. Note that if reverse the order above, should change this to newOnes.concat(renderInfos).
             // .. But while running both in tree order, we do renderInfos.concat(newOnes).
@@ -1692,6 +1704,53 @@ export const _Apply = {
         return false;
     },
 
+
+    // - Update boundaries helpers - //
+
+    preSetUpdates(boundary: UISourceBoundary, updates: UILiveNewUpdates): void {
+
+        // Prepare.
+        // We set a readonly value here - it's on purpose: we want it to be readonly for all others except in this method.
+        // const live = boundary.live as UILive & { props: Dictionary; state: Dictionary; } | undefined;
+        const live = boundary.live as UILive & { props: Dictionary; } | undefined;
+        let preUpdates = boundary._preUpdates;
+        if (!preUpdates)
+            boundary._preUpdates = (preUpdates = {});
+
+        // Update new values and preUpdates.
+        // .. Props.
+        if (updates.props) {
+            if (!preUpdates.props)
+                preUpdates.props = boundary._outerDef.props || {};
+            boundary._outerDef.props = updates.props;
+            if (live)
+                live.props = updates.props;
+            else if (boundary.mini)
+                // We set a readonly value here - it's on purpose: we want it to be readonly for all others except in this method.
+                (boundary.mini as { props: UILiveNewUpdates["props"]; }).props = updates.props;
+        }
+        // .. State.
+        if (updates.state && live) {
+            if (!preUpdates.state)
+                preUpdates.state = live.state;
+            live.state = updates.state;
+        }
+        // .. Children. This is actually set externally due to timing, but we provide it here anyway.
+        if (updates.children && boundary.closure) {
+            if (!preUpdates.children)
+                preUpdates.children = boundary.closure.envelope ? boundary.closure.envelope.targetDef.childDefs.slice() : [];
+        }
+        // .. Context.
+        if (updates.contextual && live) {
+            if (!preUpdates.contextual)
+                preUpdates.contextual = true;
+        }
+        // .. Force update mode.
+        if (updates.force)
+            preUpdates.force = ((updates.force === "all") || (preUpdates.force === "all")) ? "all" : true;
+
+    },
+
     callBoundaryChanges(boundaryChanges: UISourceBoundaryChange[]) {
         // Loop each.
         for (const info of boundaryChanges) {
@@ -1731,53 +1790,6 @@ export const _Apply = {
                     break;
             }
         }
-    },
-
-
-    // - Update boundaries helpers - //
-
-    preSetUpdates(boundary: UISourceBoundary, updates: UILiveNewUpdates): void {
-
-        // Prepare.
-        // We set a readonly value here - it's on purpose: we want it to be readonly for all others except in this method.
-        // const live = boundary.live as UILive & { props: Dictionary; state: Dictionary; } | undefined;
-        const live = boundary.live as UILive & { props: Dictionary; } | undefined;
-        let preUpdates = boundary._preUpdates;
-        if (!preUpdates)
-            boundary._preUpdates = (preUpdates = {});
-
-        // Update new values and preUpdates.
-        // .. Props.
-        if (updates.props) {
-            if (!preUpdates.props)
-                preUpdates.props = boundary._outerDef.props || {};
-            boundary._outerDef.props = updates.props;
-            if (live)
-                live.props = updates.props;
-            else if (boundary.mini)
-                // We set a readonly value here - it's on purpose: we want it to be readonly for all others except in this method.
-                (boundary.mini as { props: UILiveNewUpdates["props"]; }).props = updates.props;
-        }
-        // .. State.
-        if (updates.state && live) {
-            if (!preUpdates.state)
-                preUpdates.state = live.state;
-            live.state = updates.state;
-        }
-        // .. Children. This is actually set externally due to timing, but we provide it here anyway.
-        if (updates.children && boundary.contentClosure) {
-            if (!preUpdates.children)
-                preUpdates.children = boundary.contentClosure.envelope ? boundary.contentClosure.envelope.targetDef.childDefs.slice() : [];
-        }
-        // .. Context.
-        if (updates.contextual && live) {
-            if (!preUpdates.contextual)
-                preUpdates.contextual = true;
-        }
-        // .. Force update mode.
-        if (updates.force)
-            preUpdates.force = ((updates.force === "all") || (preUpdates.force === "all")) ? "all" : true;
-
     },
 
 
@@ -1866,7 +1878,7 @@ export const _Apply = {
             if (!thruBoundary._preUpdates)
                 continue;
             // Update and collect.
-            const uInfos = thruBoundary.uiHost.services.updateSourceBoundary(thruBoundary);
+            const uInfos = thruBoundary.uiHost.services.updateBoundary(thruBoundary);
             if (uInfos) {
                 renderInfos = renderInfos.concat(uInfos[0]);
                 boundaryChanges = boundaryChanges.concat(uInfos[1]);

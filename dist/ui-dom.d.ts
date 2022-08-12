@@ -69,36 +69,36 @@ declare class UIHostServices {
     private uiRender;
     /** To create unique id (per uiHost) for each boundary, a simple counter is used. */
     private idCounter;
-    private updateTimer;
-    private delayedUpdates;
-    private _forceRenderTimeout?;
-    private _isUpdating?;
     private listeners;
-    private pendingTimer;
-    private pendingBoundaryCalls;
-    private pendingRenderInfos;
+    private updateTimer;
+    private updatesPending;
+    private _isUpdating?;
+    private _forcePostTimeout?;
+    private renderTimer;
+    private postBoundaryCalls;
+    private postRenderInfos;
     constructor(uiHost: UIHost);
     createBoundaryId(): UISourceBoundaryId;
     clearTimers(forgetPending?: boolean): void;
     addListener(type: "update" | "render", callback: () => void): void;
     removeListener(type: "update" | "render", callback: () => void): void;
     onContextPass(outerContexts: Record<string, UIContext | null>): void;
-    removeFromUpdates(boundary: UISourceBoundary): void;
-    hasPending(updateSide?: boolean, renderSide?: boolean): boolean;
+    hasPending(updateSide?: boolean, postSide?: boolean): boolean;
+    cancelUpdates(boundary: UISourceBoundary): void;
     /** This is the main method to update a boundary.
      * - It applies the updates to bookkeeping immediately.
      * - The actual update procedure is either timed out or immediate according to settings.
      *   .. It's recommended to use a tiny update timeout (eg. 0ms) to group multiple updates together. */
-    addToUpdates(boundary: UISourceBoundary, updates: UILiveNewUpdates, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
+    absorbUpdates(boundary: UISourceBoundary, updates: UILiveNewUpdates, forceUpdateTimeout?: number | null, forcePostTimeout?: number | null): void;
     /** This method should always be used when executing updates within a uiHost - it's the main orchestrator of updates.
-     * To add to pending updates use the .addToUpdates() method above. */
-    private applyUpdates;
+     * To add to post updates use the .absorbUpdates() method above. */
+    private runUpdates;
     /** This is the core whole command to update a source boundary including checking if it should update and if has already been updated.
      * - It handles the _preUpdates bookkeeping and should update checking and return infos for changes.
-     * - It should only be called from a few places: 1. applyUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries. */
-    updateSourceBoundary(boundary: UISourceBoundary, forceUpdate?: boolean | "all", movedNodes?: UITreeNode[], bInterested?: UISourceBoundary[]): UIChangeInfos | null;
-    addToPostPending(renderInfos: UIDomRenderInfo[] | null, boundaryChanges?: UISourceBoundaryChange[] | null, forceRenderTimeout?: number | null): void;
-    private applyPostPending;
+     * - It should only be called from a few places: 1. runUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries. */
+    updateBoundary(boundary: UISourceBoundary, forceUpdate?: boolean | "all", movedNodes?: UITreeNode[], bInterested?: UISourceBoundary[]): UIChangeInfos | null;
+    absorbChanges(renderInfos: UIDomRenderInfo[] | null, boundaryChanges?: UISourceBoundaryChange[] | null, forcePostTimeout?: number | null): void;
+    private flushRender;
     private refreshWithTimeout;
 }
 
@@ -117,19 +117,21 @@ declare const UIHost_base: {
         /** Internal services to keep the whole thing together and synchronized.
          * They are the semi-private internal part of UIHost, so separated into its own class. */
         services: UIHostServices;
+        /** This is the target render definition that defines our render output. */
         targetDef: UIDefTarget | null;
-        isDisabled?: true | undefined;
+        /** Temporary value. */
+        _isDisabled?: true | undefined;
         addListener(type: "update" | "render", callback: () => void): void;
         removeListener(type: "update" | "render", callback: () => void): void;
-        renderWith(content: UIRenderOutput, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
-        clearContents(update?: boolean, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
-        modifySettings(settings: UIHostSettingsUpdate): void;
+        update(content: UIRenderOutput, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
+        clear(update?: boolean, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
         /** This is useful for refreshing the container. */
         refresh(forceUpdate?: boolean, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
         /** This performs a "refresh-render".
          * .. In case forceDomRead is on will actually read from dom to look for real changes to be done. */
         refreshRender(forceDomRead?: boolean, forceRenderTimeout?: number | null | undefined): void;
         moveInto(parent: Node | null, forceRenderTimeout?: number | null | undefined): void;
+        modifySettings(settings: UIHostSettingsUpdate): void;
         getRootDomNode(): Node | null;
         getRootDomNodes(inNestedBoundaries?: boolean): Node[];
         queryDomElement<T extends Element = Element>(selector: string, allowOverHosts?: boolean): T | null;
@@ -160,13 +162,15 @@ interface UIHost {
     services: UIHostServices;
     settings: UIHostSettings;
     targetDef: UIDefTarget | null;
-    isDisabled?: true;
-    modifySettings(settings: UIHostSettingsUpdate): void;
-    renderWith(...contents: UIRenderOutput[]): void;
-    clearContents(update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
+    _isDisabled?: true;
+    addListener(type: "update" | "render", callback: () => void): void;
+    removeListener(type: "update" | "render", callback: () => void): void;
+    update(...contents: UIRenderOutput[]): void;
+    clear(update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     refresh(forceUpdate?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     refreshRender(forceDomRead?: boolean, forceRenderTimeout?: number | null): void;
     moveInto(parent: Node | null, forceRenderTimeout?: number | null): void;
+    modifySettings(settings: UIHostSettingsUpdate): void;
     getRootDomNode(): Node | null;
     getRootDomNodes(inNestedBoundaries?: boolean): Node[];
     queryDomElement<T extends Element = Element>(selector: string, allowOverHosts?: boolean): T | null;
@@ -186,68 +190,55 @@ declare const UIHostMixin: ClassBaseMixer<UIHost>;
 
 declare class UIContextServices {
     private uiContext;
-    private refreshTimer;
-    private refreshKeys;
-    private refreshActions;
-    private refreshPostActions;
-    private refreshPostDelayed?;
-    private refreshOrder;
+    private pendingTimer;
+    private pendingKeys;
+    private mainActions;
+    private postActions;
+    private dirtyOrder;
+    /** Actions delayed by host refreshes. */
+    private delayedActions?;
     constructor(uiContext: UIContext);
-    /** Dispatches the given action through the context by default timeout.
+    /** Sends the given action through the context by default timeout.
      * - Before the action goes further, any actionHandlers can cancel it or mark it as a post action (= happens after update-n-render cycle).
      * - If asPostAction given, will ignore what .postActions and .actionHandlers would say about whether is postAction or not.
      * - Note that this should not be used for questions. */
-    dispatchAction(action: UIActions & {
+    sendAction(action: UIActions & {
         value?: never;
     }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    /** Dispatch a question. The answer will be added into the question with "value" key. */
-    dispatchQuestion(que: UIActions & (UIQuestion | UIQuestionary), maxCount?: number): void;
+    /** Ask a question. The answer will be added into the question with "value" key. */
+    askQuestion(que: UIActions & (UIQuestion | UIQuestionary), maxCount?: number): void;
     /** Refresh the context. Uses the default timing unless specified. */
-    refresh(defaultTimeout: number | null, forceTimeout?: number | null): void;
+    applyRefresh(defaultTimeout: number | null, forceTimeout?: number | null): void;
     /** This refreshes the context immediately.
      * - This is assumed to be called only by the .refresh function above.
      * - So it will mark the timer as cleared, without using window.clearTimeout for it. */
-    private refreshNow;
-    onHostPostRefresh(byHostInfo?: [host: UIHost, listener: () => void]): void;
+    private refreshPending;
+    onHostRender(byHostInfo?: [host: UIHost, listener: () => void]): void;
+    /** Note that this only adds the refresh keys but will not refresh. If you also want to refresh use .refresh(refreshKeys) instead. */
     addRefreshKeys(refreshKeys?: string | string[] | boolean): void;
+    /** Run the data about for given boundaries and listeners. */
     private runData;
+    /** Run the action / question for given boundaries and listeners. */
     private runAction;
-    private callActionHandlers;
+    /** This calls each action handler and returns what they decide with importance of "cancel" > "post" > "quick". */
+    private preHandleAction;
+    static flagActions(settings: UIContext["settings"], prop: "quickActions" | "postActions", actionTypes: true | null | string | string[] | Set<string>, extend?: boolean): void;
     onInterest(side: "data" | "actions", boundary: UILiveSource, ctxName: string): void;
     onDisInterest(side: "data" | "actions", boundary: UILiveSource, ctxName: string): void;
     onBoundaryMove(boundary: UILiveSource, ctxName: string): void;
     static sortCollection(collection: Map<UILiveSource, Set<string>>): Map<UILiveSource, Set<string>>;
 }
 
-declare type UIContextSettingsUpdate = {
+declare type UIContextSettingsUpdate<ActionTypes extends string = string> = {
     refreshTimeout?: null | number;
-    postActions?: null | string | string[] | Set<string>;
-    quickActions?: true | null | string | string[] | Set<string>;
+    postActions?: null | ActionTypes | ActionTypes[] | Set<ActionTypes>;
+    quickActions?: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>;
 };
 declare const UIContext_base: {
-    new (data: any, settings: UIContextSettingsUpdate | null | undefined, ...passArgs: any[]): {
-        /** The roots where this context is inserted.
-         * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-        roots: Map<UITreeNodeContexts, string>;
-        /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-        dataBoundaries: Map<UILiveSource<{}, {}>, Set<string>>;
-        /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-        actionBoundaries: Map<UILiveSource<{}, {}>, Set<string>>;
-        /** Any external data listeners - called after the live components. */
-        dataListeners: Map<UIUponData<UIContext<any, {}>>, true | Set<string>>;
-        /** Any external action listeners - called after the live components. */
-        actionListeners: Map<UIUponAction<UIContext<any, {}>> | UIUponQuestion<UIContext<any, {}>, UIAction & {
-            value: any;
-        }>, true | Set<string>>;
-        /** Any external action pre-listeners: called immediately when action dispatched.
-         * - Return true to make the action be triggered after update and render (within each uiHost).
-         * - Return false to cancel dispatching the action (after pre-listeners).
-         * - Otherwise will dispatch the action normally upon refreshing the context.
-         * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
-        actionHandlers: Map<UIUponPreAction<UIContext<any, {}>>, true | Set<string>>;
+    new (data: any, settings: UIContextSettingsUpdate<string> | null | undefined, ...passArgs: any[]): {
         data: any;
         settings: {
-            /** Set of action types that should always be dispatched after the update-n-render cycle.
+            /** Set of action types that should always be sent after the update-n-render cycle.
              * If overlaps with quickActions, will be interpreted as a post action.*/
             postActions: Set<string> | null;
             /** Set of action types that should always be run immediately.
@@ -262,9 +253,28 @@ declare const UIContext_base: {
         /** Internal services to keep the whole thing together and synchronized.
          * They are the semi-private internal part of UIContext, so separated into its own class. */
         services: UIContextServices;
-        modifySettings(settings: UIContextSettingsUpdate): void;
-        addAsPostActions(actionTypes: string | string[] | Set<string> | null, extend?: boolean): void;
-        addAsQuickActions(actionTypes: string | true | string[] | Set<string> | null, extend?: boolean): void;
+        /** Contains the TreeNodes where this context is inserted as keys and values is a Set of names is inserted as.
+         * - This is not used for refresh flow (anymore), but could be very useful for custom purposes. */
+        inTree: Map<UITreeNodeContexts, Set<string>>;
+        /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
+        dataBoundaries: Map<UILiveSource<{}, {}>, Set<string>>;
+        /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
+        actionBoundaries: Map<UILiveSource<{}, {}>, Set<string>>;
+        /** Any external data listeners - called after the live components. */
+        dataListeners: Map<UIUponData<UIContext<any, {}>>, true | Set<string>>;
+        /** Any external action listeners - called after the live components. */
+        actionListeners: Map<UIUponAction<UIContext<any, {}>> | UIUponQuestion<UIContext<any, {}>, UIAction & {
+            value: any;
+        }>, true | Set<string>>;
+        /** Any external action pre-listeners: called immediately when action sent.
+         * - Return true to make the action be triggered after update and render (within each uiHost).
+         * - Return false to cancel sending the action (after pre-listeners).
+         * - Otherwise will send the action normally upon refreshing the context.
+         * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
+        actionHandlers: Map<UIUponPreAction<UIContext<any, {}>>, true | Set<string>>;
+        modifySettings(settings: UIContextSettingsUpdate<string>): void;
+        flagPostActions(actionTypes: string | string[] | Set<string> | null, extend?: boolean): void;
+        flagQuickActions(actionTypes: string | true | string[] | Set<string> | null, extend?: boolean): void;
         addActionHandler(listener: UIUponPreAction<UIContext<any, {}>>, actionTypes?: string | true | string[]): void;
         removeActionHandler(listener: UIUponPreAction<UIContext<any, {}>>): void;
         addActionListener(listener: UIUponAction<UIContext<any, {}>> | UIUponQuestion<UIContext<any, {}>, UIAction & {
@@ -275,25 +285,19 @@ declare const UIContext_base: {
         }>): void;
         addDataListener(listener: UIUponData<UIContext<any, {}>>, refreshKeys?: string | true | string[]): void;
         removeDataListener(listener: UIUponData<UIContext<any, {}>>): void;
-        dispatchAction(action: UIActions & {
+        sendAction(action: UIActions & {
             value?: undefined;
         }, asAction?: "" | "post" | "quick" | undefined, forceTimeout?: number | null | undefined): void;
-        dispatchActionWith(actionType: string, payload: any, asAction?: "" | "post" | "quick" | undefined, forceTimeout?: number | null | undefined): void;
-        dispatchQuestion(question: UIQuestion<any>, defaultValue?: any): any;
-        dispatchQuestionWith(type: string, payload?: any, defaultValue?: any): any;
-        dispatchQuestionary(question: UIQuestionary<any>, maxAnswers?: number): any[];
-        dispatchQuestionaryWith(type: string, payload?: any, maxAnswers?: number): any[];
+        sendActionWith(actionType: string, payload: any, asAction?: "" | "post" | "quick" | undefined, forceTimeout?: number | null | undefined): void;
+        askQuestion(question: UIQuestion<any>, defaultValue?: any): any;
+        askQuestionWith(type: string, payload?: any, defaultValue?: any): any;
+        askQuestionary(question: UIQuestionary<any>, maxAnswers?: number): any[];
+        askQuestionaryWith(type: string, payload?: any, maxAnswers?: number): any[];
         setData(data: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null | undefined): void;
         setInData(dataKey: string, subData: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null | undefined): void;
         getData(): any;
         getInData(dataKey: string): any;
-        /** Method to refresh by adding the given keys. */
-        refreshBy(refreshKeys?: string | boolean | string[], forceTimeout?: number | null | undefined): void;
-        /** This refreshes both: context & pending actions.
-         * - The refresh flows down the tree, and for each matching boundary, calls the action first and then checks context.
-         * - Note that if the live component was interested in the context, will use the .addToUpdates flow - so there might be a timeout before gets actually applied.
-         * - Note that if !!refreshKeys is false, then will not add any refreshKeys. If there were none, will only update actions. */
-        refresh(forceTimeout?: number | null | undefined): void;
+        refresh(refreshKeys?: string | boolean | string[] | undefined, forceTimeout?: number | null | undefined): void;
         constructor: Function;
         toString(): string;
         toLocaleString(): string;
@@ -303,42 +307,31 @@ declare const UIContext_base: {
         propertyIsEnumerable(v: PropertyKey): boolean;
     };
     UI_DOM_TYPE: string;
-    addToSettingsActions(settings: {
-        /** Set of action types that should always be dispatched after the update-n-render cycle.
-         * If overlaps with quickActions, will be interpreted as a post action.*/
-        postActions: Set<string> | null;
-        /** Set of action types that should always be run immediately.
-         * - Set true to force all as quick - this changes the general behaviour.
-         * - Note that if overlaps with postActions, will be treated as a post action. */
-        quickActions: true | Set<string> | null;
-        /** Timeout for refreshing for this particular context.
-         * - The timeout is used for both: actions & data refreshes.
-         * - If null, then synchronous - defaults to 0ms. */
-        refreshTimeout: number | null;
-    }, prop: "quickActions" | "postActions", actionTypes: string | true | string[] | Set<string> | null, extend?: boolean): void;
 };
 interface UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> {
     Actions: Actions;
-    /** The roots where this context is inserted.
+    /** Contains the TreeNodes where this context is inserted as keys and values is the name is inserted as.
      * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
-    roots: Map<UITreeNodeContexts, string>;
+    inTree: Map<UITreeNodeContexts, Set<string>>;
     /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
     dataBoundaries: Map<UILiveSource, Set<string>>;
     /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
     actionBoundaries: Map<UILiveSource, Set<string>>;
-    /** Any external data listeners - called after the live components. */
+    /** External data listeners - called after the live components. The keys are data listener callbacks, and values are interests. */
     dataListeners: Map<UIUponData<UIContext<Data, Actions>>, Set<string> | true>;
-    /** Any external action listeners - called after the live components. */
+    /** External action listeners - called after the live components. The keys are action listener / question answer callbacks, and values are action interests. */
     actionListeners: Map<UIUponAction<UIContext<Data, Actions>> | UIUponQuestion<UIContext<Data, Actions>>, Set<string> | true>;
-    /** Any external action pre-listeners: called immediately when action dispatched.
-     * - Return true to make the action be triggered after update and render (within each uiHost).
-     * - Return false to cancel dispatching the action (after pre-listeners).
-     * - Otherwise will dispatch the action normally upon refreshing the context.
-     * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
+    /** External action pre-handlers: called immediately when action sent.
+     * - Can return what to do for actions - for questions, the return value is ignored: they are always asked.
+     *     1. Return "cancel" to cancel sending the action (after pre-listeners).
+     *     2. Return "post" to make the action be triggered after update and render (within each uiHost).
+     *     3. Return "quick" to make the action be triggered immediately after pre-handling.
+     * - If many returned things to do, the order of importance is: "cancel" > "post" > "quick".
+     * - Otherwise will send the action normally upon refreshing the context. */
     actionHandlers: Map<UIUponPreAction<UIContext<Data, Actions>>, Set<string> | true>;
     data: Data;
     settings: {
-        /** Set of action types that should always be dispatched after the update-n-render cycle.
+        /** Set of action types that should always be sent after the update-n-render cycle.
          * If overlaps with quickActions, will be interpreted as a post action.*/
         postActions: null | Set<Actions["type"] & string>;
         /** Set of action types that should always be run immediately.
@@ -346,20 +339,19 @@ interface UIContext<Data extends UIContextData = any, Actions extends UIActions 
          * - Note that if overlaps with postActions, will be treated as a post action. */
         quickActions: true | null | Set<Actions["type"] & string>;
         /** Timeout for refreshing for this particular context.
-         * - The timeout is used for both: actions & data refreshes.
-         * - If null, then synchronous - defaults to 0ms. */
+         * - The timeout is used for both: data refresh and (normal) actions.
+         * - If null, then synchronous - defaults to 0ms.
+         * - Note that if you use null, the updates will run synchronously.
+         *   .. It's not recommended to use it, because you'd have to make sure you always use it in that sense.
+         *   .. For example, the component you called from might have already unmounted on the next line (especially if host is fully synchronous, too). */
         refreshTimeout: number | null;
     };
     /** Internal services to keep the whole thing together and synchronized.
      * They are the semi-private internal part of UIContext, so separated into its own class. */
     services: UIContextServices;
-    modifySettings<ActionTypes extends Actions["type"] & string>(settings: {
-        postActions?: null | ActionTypes | ActionTypes[] | Set<ActionTypes>;
-        quickActions?: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>;
-        refreshTimeout?: null | number;
-    }): void;
-    addAsPostActions<ActionTypes extends Actions["type"] & string>(actionTypes: null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
-    addAsQuickActions<ActionTypes extends Actions["type"] & string>(actionTypes: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
+    modifySettings(settings: UIContextSettingsUpdate<Actions["type"] & string>): void;
+    flagPostActions<ActionTypes extends Actions["type"] & string>(actionTypes: null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
+    flagQuickActions<ActionTypes extends Actions["type"] & string>(actionTypes: true | null | ActionTypes | ActionTypes[] | Set<ActionTypes>, extend?: boolean): void;
     /** Adds a new action pre-listener that can talkback how to treat the action. If exists already, overrides. */
     addActionHandler(listener: UIUponPreAction<UIContext<Data, Actions>>, actionTypes?: Actions["type"] & string | (Actions["type"] & string)[] | true): void;
     /** Remove an action listener. */
@@ -372,53 +364,58 @@ interface UIContext<Data extends UIContextData = any, Actions extends UIActions 
     addDataListener<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(listener: UIUponData<UIContext<Data, Actions>>, refreshKeys?: DataKey | DataKey[] | true): void;
     /** Remove an data listener. */
     removeDataListener(listener: UIUponData): void;
-    /** Dispatches the given action through the context by default timeout.
+    /** Sends the given action through the context by default timeout.
      * - Before the action goes further, any actionHandlers can cancel it or mark it as a post action (= happens after update-n-render cycle).
      * - If asPostAction given, will ignore what .postActions and .actionHandlers would say about whether is postAction or not.
      * - Note that this should not be used for questions. */
-    dispatchAction(action: Actions & {
+    sendAction(action: Actions & {
         value?: never;
     }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    /** Creates an action and dispatches it through the context by default timeout.
+    /** Creates an action and sends it through the context by default timeout.
      * - Before the action goes further, any actionHandlers can cancel it or mark it as a post action (= happens after update-n-render cycle).
      * - If asPostAction given, will ignore what .postActions and .actionHandlers would say about whether is postAction or not.
      * - Note that this should not be used for questions. */
-    dispatchActionWith<Type extends Actions["type"], Action extends Actions & {
+    sendActionWith<Type extends Actions["type"], Action extends Actions & {
         type: Type;
     } & {
         value: never;
     }>(actionType: Type, payload: Action["payload"], asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    dispatchActionWith<Type extends (Actions & {
+    sendActionWith<Type extends (Actions & {
         payload?: never;
     } & {
         value: never;
     })["type"]>(actionType: Type, payload?: undefined | never, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    /** Dispatch a question.
+    /** Ask a question.
      * - You get the answer synchronously by the return value (comes from the first answerer, then stops going further).
      * - If there's no answerers, then returns the optional defaultValue (or from question.value) - or then undefined.
-     * - Note that dispatching a question also modifies the original question by adding .value into it with the collected answer. */
-    dispatchQuestion<Action extends Actions & UIQuestion<Action["value"]>>(question: Action & {
+     * - Note that sending a question also modifies the original question by adding .value into it with the collected answer. */
+    askQuestion<Action extends Actions & UIQuestion<Action["value"]>>(question: Action & {
         value?: Action["value"];
     }, defaultValue?: Action["value"]): Action["value"];
-    /** Dispatch a question by defining it on the go. See .dispatchQuestion method for details. */
-    dispatchQuestionWith<Action extends Actions & UIQuestion<Action["value"]>>(type: Action["type"], payload: Action["payload"], defaultValue?: Action["value"]): Action["value"];
-    dispatchQuestionWith<Action extends Actions & UIQuestion<Action["value"]> & {
+    /** Ask a question by defining it on the go. See .askQuestion method for details. */
+    askQuestionWith<Action extends Actions & UIQuestion<Action["value"]>>(type: Action["type"], payload: Action["payload"], defaultValue?: Action["value"]): Action["value"];
+    askQuestionWith<Action extends Actions & UIQuestion<Action["value"]> & {
         payload?: never;
     }>(type: Action["type"], payload?: null, defaultValue?: Action["value"]): Action["value"];
-    /** Dispatch a questionary (of one question with many answers) in the context.
+    /** Ask a questionary (of one question with many answers) in the context.
      * - You get the answers synchronously by the return value (comes from all the answerers).
      * - If there's no answerers, then returns an empty array.
-     * - Note that dispatching a questionary also modifies the original question by adding .value and .values into it.
+     * - Note that sending a questionary also modifies the original question by adding .value and .values into it.
      *   .. If any answered, the last answer be found as .value. (If none, .value is not added.) */
-    dispatchQuestionary<Action extends Actions & UIQuestionary<Action["value"]>>(question: Action & {
+    askQuestionary<Action extends Actions & UIQuestionary<Action["value"]>>(question: Action & {
         value?: Action["value"];
         values?: Action["value"][];
     }, maxAnswers?: number): Action["value"][];
-    /** Dispatch a questionary by defining it on the go. See .dispatchQuestion method for details. */
-    dispatchQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]>>(type: Action["type"], payload: Action["payload"], maxAnswers?: number): Action["value"][];
-    dispatchQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]> & {
+    /** Ask a questionary by defining it on the go. See .askQuestion method for details. */
+    askQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]>>(type: Action["type"], payload: Action["payload"], maxAnswers?: number): Action["value"][];
+    askQuestionaryWith<Action extends Actions & UIQuestionary<Action["value"]> & {
         payload?: never;
     }>(type: Action["type"], payload?: null, maxAnswers?: number): Action["value"][];
+    /** Get the whole data (directly).
+     * - If you want to use refreshes and such as designed, don't modify the data directly (do it via setData or setInData) - or then call .refreshData accordingly. */
+    getData(): Data;
+    /** Get a portion within the data using dotted string to point the location. For example: "themes.selected". */
+    getInData<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(dataKey: DataKey): PropType<Data, DataKey>;
     /** Set the data and refresh.
      * - Note that the extend functionality should only be used for dictionary objects. */
     setData(data: Partial<Data> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
@@ -427,17 +424,14 @@ interface UIContext<Data extends UIContextData = any, Actions extends UIActions 
      * - Note that the extend functionality should only be used for dictionary objects. */
     setInData<DataKey extends string, SubData extends PropType<Data, DataKey, never>>(dataKey: DataKey, subData: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
     setInData<DataKey extends string, SubData extends PropType<Data, DataKey, never>>(dataKey: DataKey, subData: SubData, extend?: boolean | undefined, refresh?: boolean, forceTimeout?: number | null): void;
-    getData(): Data;
-    getInData<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(dataKey: DataKey): PropType<Data, DataKey>;
-    /** Method to refresh by adding the given keys. */
-    refreshBy<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
     /** This refreshes both: context & pending actions.
+     * - If refreshKeys defined, will add them - otherwise only refreshes pending.
      * - The refresh flows down the tree, and for each matching boundary, calls the action first and then checks context.
      * - Note that if the live component was interested in the context, will use the .addToUpdates flow - so there might be a timeout before gets actually applied.
      * - Note that if !!refreshKeys is false, then will not add any refreshKeys. If there were none, will only update actions. */
-    refresh(forceTimeout?: number | null): void;
+    refresh<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
     onInsertInto?(treeNode: UITreeNodeContexts, name: string): void;
-    onRemoveFrom?(treeNode: UITreeNodeContexts): void;
+    onRemoveFrom?(treeNode: UITreeNodeContexts, name: string): void;
     onDataInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
     onActionInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
 }
@@ -448,7 +442,7 @@ declare type UIContextType<Data extends UIContextData = any, Actions extends UIA
     readonly UI_DOM_TYPE: "Context";
 };
 /** Create a new context. */
-declare const createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: UIContextSettingsUpdate) => UIContext<Data, Actions>;
+declare const createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: UIContextSettingsUpdate<Actions["type"] & string> | undefined) => UIContext<Data, Actions>;
 /** There are two ways you can use this:
  * 1. Call this to give basic UIContext features with types for Data and Actions being empty.
  *      * For example: `class MyMix extends UIContextMixin(MyBase) {}`
@@ -476,7 +470,7 @@ declare const UILive_base: {
     new (props: {}, ...args: any[]): {
         readonly props: {};
         state: {};
-        context: {};
+        remote: {};
         readonly wired: Set<UIWiredType<{}, {}, {}, any[], (lastProps: {} | null, ...params: any[]) => {}, (baseProps: {}, addsProps: {}, ...params: any[]) => {}>> | null;
         /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
         readonly boundary: UILiveSource<{}, {}>;
@@ -506,29 +500,31 @@ declare const UILive_base: {
          * - If boolean given it forces the mode.
          * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
         needsChildren(needs?: boolean | "temp" | null | undefined): void;
-        needsContext(contextName: {} & string, needs?: any, refresh?: boolean): void;
-        needsContexts(...names: Record<never, string | boolean | string[]>[]): void;
+        needsData(contextName: {} & string, needs?: any, refresh?: boolean | undefined): boolean;
+        needsDataBy(namedNeeds: Record<never, string | boolean | string[]>, extend?: boolean | undefined, refresh?: boolean | undefined): boolean;
         needsAction(contextName: {} & string, actionType: string, needs?: boolean | undefined): void;
         needsActions(contextName: {} & string, actionTypes?: boolean | string[], extend?: boolean | undefined): void;
-        setContextData(contextName: never, data: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null | undefined): void;
-        setInContextData(contextName: never, dataKey: string, data: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null | undefined): void;
-        getContextData(contextName: never, noContextFallback?: any): any;
-        getInContextData(contextName: never, dataKey: string, noContextFallback?: any): any;
-        refreshInContext(contextName: never, refreshKeys?: string | boolean | string[], forceTimeout?: number | null | undefined): void;
-        dispatchAction(contextName: never, action: UIActions & {
+        needsActionsBy(namedNeeds: Record<never, boolean | string[]>, extendWithinContext?: boolean | undefined, extendForAll?: boolean | undefined): void;
+        setData(contextName: never, data: any, extend?: boolean | undefined, refresh?: boolean | undefined, forceTimeout?: number | null | undefined): void;
+        setInData(contextName: never, dataKey: string, data: any, extend?: boolean | undefined, refresh?: boolean | undefined, forceTimeout?: number | null | undefined): void;
+        getData(contextName: never, noContextFallback?: any): any;
+        getInData(contextName: never, dataKey: string, noContextFallback?: any): any;
+        refreshData(contextName: never, refreshKeys?: string | boolean | string[] | undefined, forceTimeout?: number | null | undefined): void;
+        refreshDataBy(namedNeeds: Record<never, string | boolean | string[]>, forceTimeout?: number | null | undefined): void;
+        sendAction(contextName: never, action: UIActions & {
             value?: undefined;
         }, asAction?: "" | "post" | "quick" | undefined, forceTimeout?: number | null | undefined): void;
-        dispatchActionWith(contextName: never, actionType: string, payload: any, asAction?: "" | "post" | "quick" | undefined, forceTimeout?: number | null | undefined): void;
-        dispatchQuestion(contextName: never, question: UIAction & {
+        sendActionWith(contextName: never, actionType: string, payload: any, asAction?: "" | "post" | "quick" | undefined, forceTimeout?: number | null | undefined): void;
+        askQuestion(contextName: never, question: UIAction & {
             value: any;
         }, defaultValue?: any): any;
-        dispatchQuestionWith(contextName: never, type: string, payload: any, defaultValue?: any, maxAnswers?: number): any;
-        dispatchQuestionary(contextName: never, question: UIActions & UIAction & {
+        askQuestionWith(contextName: never, type: string, payload: any, defaultValue?: any, maxAnswers?: number): any;
+        askQuestionary(contextName: never, question: UIActions & UIAction & {
             value?: any;
             values: any[];
         }, maxAnswers?: number): any[];
-        dispatchQuestionaryWith(contextName: never, type: string, payload: any, maxAnswers?: number): any[];
-        hasContext(name: never): boolean;
+        askQuestionaryWith(contextName: never, type: string, payload: any, maxAnswers?: number): any[];
+        hasContext(name: never, onlyTypes?: UIContextAttach): boolean;
         getContext(name: never, onlyTypes?: UIContextAttach): UIContext<any, {}> | null | undefined;
         getContexts(onlyNames?: RecordableType<never> | null | undefined, onlyTypes?: UIContextAttach | undefined): Partial<Record<string, UIContext<any, {}> | null>>;
         overrideContext(name: string, context: UIContext<any, {}> | null | undefined, refresh?: boolean): void;
@@ -547,10 +543,10 @@ declare const UILive_base: {
     };
     UI_DOM_TYPE: string;
 };
-interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, ContextData extends Dictionary = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
+interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
     readonly props: Props;
     state: State;
-    context: ContextData;
+    remote: Remote;
     readonly wired: Set<UIWiredType> | null;
     /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
     readonly boundary: UILiveSource;
@@ -580,66 +576,84 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, C
     /** Use this to set the optional data refresh keys - resets the current keys for that context.
      * - There can be one or many keywords, or true to allow anything (default). If false, then removes needs.
      * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "."
-     * - By default, will mark the component to be updated if it was changed. If you intend to define multiple in a row, you can set the third parameter to false for all except the very last one. */
-    needsContext<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, needs?: boolean | DataKey | DataKey[], refresh?: boolean): void;
+     * - By default, will mark the component to be updated if it was changed. If you intend to define multiple in a row, you can set the third parameter to false for all except the very last one.
+     * - Returns boolean, whether needs changed (for custom refreshing purposes). */
+    needsData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataNeeds?: boolean | DataKey | DataKey[], refreshIfChanged?: boolean): boolean;
     /** Call this to define contextual needs alltogether.
-     * - With strings, will define true as refresh keys, with a record, uses the value in it.
-     * - This resets the situation - typically called once at start up.
-     * - Note that this will mark the component to be updated, if there were any changes in the needs. */
-    needsContexts<Name extends keyof AllContexts & string, DataKey extends NestedPaths<AllContexts[Name]["data"]>>(...names: (Name | Record<Name, boolean | DataKey | DataKey[]>)[]): void;
+     * - Give a dictionary object where keys are context names and values are the needs: 1. boolean, 2. data key, 3. array of data keys.
+     *     * For example: { settings: true, navigation: ["page", "doc"] }
+     *     * Note that with TypeScript you must add `as const` after each array, eg. `["page", "doc"] as const`
+     * - By default will extend the context needs and so only replaces the needs for the contexts found in the new info - others are unaffected. If extend is false, resets the situation as a whole.
+     * - Note that this will mark the component to be updated, if there were any changes in the needs. If you don't want this put the (3rd) refresh argument to false.
+     *     * Note that if was already updating (eg. called during rendering), will not trigger a new update - just immediately marks the needs and tells the related contexts if status changed (is interested or not).
+     * - Returns boolean, whether needs changed (for custom refreshing purposes). */
+    needsDataBy<All extends {
+        [Name in keyof AllContexts]: All[Name] extends boolean ? boolean : All[Name] extends string ? PropType<AllContexts[Name]["data"], All[Name], never> extends never ? never : string : All[Name] extends string[] | readonly string[] ? unknown extends PropType<AllContexts[Name]["data"], All[Name][number]> ? never : string[] | readonly string[] : never;
+    }>(namedNeeds: Partial<All>, extend?: boolean, refreshIfChanged?: boolean): boolean;
     /** Call to define depencies on a single action.
-     * If needs is false, then removes the need for this action - undefined or true adds.
-     * Note that you should also assign the callback for uponAction or uponQuestion for questions. */
+     * - If needs is false, then removes the need for this action - undefined or true adds.
+     * - Note that you should also assign the callback for uponAction or uponQuestion for questions. */
     needsAction<Name extends keyof AllContexts & string>(contextName: Name, actionType: AllContexts[Name]["Actions"]["type"] & string, needs?: boolean): void;
     /** Call to define depencies on multiple actions.
-     * If extend is true, extends the previously set needs - otherwise (by default) resets the needs to the given.
-     * Note that you should also assign the callbacks for uponAction and/or uponQuestion. */
+     * - By default extend is true, and so extends the previously set needs - if extend is false, resets the needs to the given.
+     * - Note that you should also assign the callbacks for uponAction and/or uponQuestion. */
     needsActions<Name extends keyof AllContexts & string>(contextName: Name, actionTypes: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean, extend?: boolean): void;
+    /** Set action needs for multiple contexts in one go. It's like multiple needsActions calls as a dictionary: `{ [ctxName]: boolean | actionTypes[]; }`
+     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds.
+     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context. */
+    needsActionsBy<All extends {
+        [Name in keyof AllContexts]: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean;
+    }>(namedNeeds: All, extend?: boolean): void;
     /** Set the whole data of the context, and trigger refresh (by default). If the data is an object, can also extend. */
-    setContextData<Name extends keyof AllContexts & string>(contextName: Name, data: Partial<AllContexts[Name]["data"]> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
-    setContextData<Name extends keyof AllContexts & string>(contextName: Name, data: AllContexts[Name]["data"], extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
+    setData<Name extends keyof AllContexts & string>(contextName: Name, data: Partial<AllContexts[Name]["data"]> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
+    setData<Name extends keyof AllContexts & string>(contextName: Name, data: AllContexts[Name]["data"], extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Set a portion of data inside the context data, and trigger refresh (by default). If the sub data is an object, can also extend.
      * Use the dataKey to define the location as a dotted string. For example: themes.selected */
-    setInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
-    setInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: SubData, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
+    setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
+    setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: SubData, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Get the whole context data (directly). */
-    getContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData | undefined>(contextName: Name, noContextFallback?: never | undefined): CtxData | undefined;
-    getContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData>(contextName: Name, noContextFallback: FallbackData): CtxData;
+    getData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData | undefined>(contextName: Name, noContextFallback?: never | undefined): CtxData | undefined;
+    getData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], FallbackData extends CtxData>(contextName: Name, noContextFallback: FallbackData): CtxData;
     /** Get a portion of data inside the context data (directly).
      * Use the dataKey to define the location as a dotted string. For example: "themes.selected" */
-    getInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataKey: DataKey, noContextFallback?: never | undefined): PropType<CtxData, DataKey> | undefined;
-    getInContextData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string, SubData extends PropType<CtxData, DataKey>, FallbackData extends SubData>(contextName: Name, dataKey: DataKey, noContextFallback: FallbackData): SubData;
+    getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataKey: DataKey, noContextFallback?: never | undefined): PropType<CtxData, DataKey> | undefined;
+    getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string, SubData extends PropType<CtxData, DataKey>, FallbackData extends SubData>(contextName: Name, dataKey: DataKey, noContextFallback: FallbackData): SubData;
     /** Manually trigger refresh for dataKeys in the context.
      * Use the refreshKeys to define the location as a dotted string or an array of dotted strings. For example: ["themes.selected", "preferences"] */
-    refreshInContext<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
-    /** Dispatch an action in the context. */
-    dispatchAction<Name extends keyof AllContexts & string>(contextName: Name, action: AllContexts[Name]["Actions"] & {
+    refreshData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
+    /** Manually trigger refresh for dataKeys for multiple contexts. (Also see refreshData above.)
+     * - The keys are context names and values define the refresh: boolean | DataKey | DataKey[]. */
+    refreshDataBy<All extends {
+        [Name in keyof AllContexts]: All[Name] extends boolean ? boolean : All[Name] extends string ? PropType<AllContexts[Name]["data"], All[Name], never> extends never ? never : string : All[Name] extends string[] | readonly string[] ? unknown extends PropType<AllContexts[Name]["data"], All[Name][number]> ? never : string[] | readonly string[] : never;
+    }>(namedRefreshes: Partial<All>, forceTimeout?: number | null): void;
+    /** Send an action in the context. */
+    sendAction<Name extends keyof AllContexts & string>(contextName: Name, action: AllContexts[Name]["Actions"] & {
         value: never;
     }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    /** Dispatch an action within the context by declaring it on the go with type and payload. */
-    dispatchActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & {
+    /** Send an action within the context by declaring it on the go with type and payload. */
+    sendActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & {
         value: never;
     }, Type extends Actions["type"], Action extends Actions & {
         type: Type;
     }>(contextName: Name, actionType: Type, payload: Action["payload"], asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    dispatchActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & {
+    sendActionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & {
         value: never;
     }, Type extends (Actions & {
         payload?: never;
     })["type"]>(contextName: Name, actionType: Type, payload?: undefined, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void;
-    /** Dispatch a question in the context.
+    /** Ask a question in the context.
      * - You get the answer synchronously by the return value (comes from the first answerer, then stops going further).
      * - If there's no answerers, or no context found, then returns the optional defaultValue (or from question.value) - or then undefined.
-     * - Note that dispatching a question also modifies the original question by adding .value into it with the collected answer. */
-    dispatchQuestion<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & {
+     * - Note that asking a question also modifies the original question by adding .value into it with the collected answer. */
+    askQuestion<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & {
         value?: Action["value"];
     }, value?: Action["value"]): Action["value"] | undefined;
-    /** Dispatch a questionary (of one question with many answers) in the context.
+    /** Ask a questionary (of one question with many answers) in the context.
      * - You get the answers synchronously by the return value (comes from all the answerers).
      * - If there's no answerers, or no context found, then returns an empty array.
-     * - Note that dispatching a questionary also modifies the original question by adding .value and .values into it.
+     * - Note that asking a questionary also modifies the original question by adding .value and .values into it.
      *   .. If any answered, the last answer be found as .value. (If none, .value is not added.) */
-    dispatchQuestionary<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & {
+    askQuestionary<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & {
         value?: Action["value"];
     }, maxAnswers?: number): Action["value"][];
     /** Check quickly whether has context or not. Rarely needed - uses .getContext internally. */
@@ -649,10 +663,9 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, C
      * - If includeTunnels is set to false, skips contexts assigned by tunneling (overrideContext call or by attachTunnels prop).
      * - This is mainly useful, when wanting to send actions from within the component - or perhaps in some special circumstances. */
     getContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): AllContexts[Name] | null | undefined;
-    /** Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names.
-     *  UIContextAttach are:
+    /** Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
      *  - Cascading (1): Outer contexts.
-     *  - Attached (2): Attached tunnels.
+     *  - Parent (2): Attached by parent.
      *  - Overridden (4): Locally overridden. */
     getContexts<Name extends keyof AllContexts & string>(onlyNames?: RecordableType<Name> | null, onlyTypes?: UIContextAttach): Partial<Record<Name, AllContexts[Name] | null>>;
     /** Override context for this component only without affecting the cascading context flow.
@@ -687,36 +700,37 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, C
      * - Note that in the UILive context, you should always have builderOrProps or mixer. (Otherwise makes no sense to hook up to component's updates.) */
     createWired<BaseProps extends Dictionary = {}, WiredProps extends Dictionary = {}, MixedProps extends Dictionary = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps>(funcOrClass: UIComponent<MixedProps>, builderOrProps: Builder | WiredProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
     /** The most important function of a UILive: the render output function. */
-    render(props: Props, ui: ThisType<this>): UIRenderOutput | UILiveFunction<Props, State, ContextData, AllContexts>;
-    render(): UIRenderOutput | UILiveFunction<Props, State, ContextData, AllContexts>;
-    /** Override this to listen to actions - originated by dispatchAction call on the context. */
+    render(props: Props, ui: ThisType<this>): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
+    render(): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
+    /** Override this to listen to actions - originated by sendAction call on the context. */
     uponAction?<Name extends keyof AllContexts & string, Context extends AllContexts[Name]>(action: Context["Actions"], context: Context, name: Name): void;
-    /** Override this to answer to questions - asked by dispatchQuestion call on the context. */
+    /** Override this to answer to questions - asked by askQuestion call on the context. */
     uponQuestion?<Name extends keyof AllContexts & string, Context extends AllContexts[Name], Action extends Context["Actions"] & UIQuestion<Action["value"]>>(action: Action, context: Context, name: Name): Action["value"];
     /** Override this with the actual method to build the context for this particular component. */
-    buildContext?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): ContextData;
+    buildRemote?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): Remote;
     onContextChange?<Name extends keyof AllContexts & string>(name: Name, newContext: AllContexts[Name] | null, oldContext: AllContexts[Name] | null): boolean | null;
     /** This is a callback that will always be called when the component is checked for updates.
      * - Note that this is not called on mount, but will be called everytime on update, even if will not actually update (use the 3rd param).
      * - Note that this will be called after uiShouldUpdate (if that is called) and right before the update happens.
      * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
-    uiBeforeUpdate?(preUpdates: UILiveUpdates<Props, State, ContextData>, newUpdates: UILiveUpdates<Props, State, ContextData>, willUpdate: boolean): void;
+    uiBeforeUpdate?(preUpdates: UILiveUpdates<Props, State, Remote>, newUpdates: UILiveUpdates<Props, State, Remote>, willUpdate: boolean): void;
     /** Callback to determine whether should update or not.
      * - If returns true, component will update. If false, will not.
      * - If returns null (or no uiShouldUpdate method assigned), will use the rendering settings to determine.
      * - Note that this is not called every time necessarily (never on mount, and not if was forced).
      * - Note that this is called right before uiBeforeUpdate and the actual update (if that happens).
      * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
-    uiShouldUpdate?(preUpdates: UILiveUpdates<Props, State, ContextData>, newUpdates: UILiveUpdates<Props, State, ContextData>): boolean | null;
+    uiShouldUpdate?(preUpdates: UILiveUpdates<Props, State, Remote>, newUpdates: UILiveUpdates<Props, State, Remote>): boolean | null;
     uiDidMount?(): void;
     uiDidMove?(): void;
-    uiDidUpdate?(preUpdates: UILiveUpdates<Props, State, ContextData>, newUpdates: UILiveUpdates<Props, State, ContextData>): void;
+    uiDidUpdate?(preUpdates: UILiveUpdates<Props, State, Remote>, newUpdates: UILiveUpdates<Props, State, Remote>): void;
     uiWillUnmount?(): void;
 }
-declare class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, ContextData extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends UILive_base {
+declare class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends UILive_base {
     constructor(props: Props, ...args: any[]);
 }
-declare const createLive: <Props extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Context extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props, State, Context, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Context, AllContexts>) => UILiveFunction<Props, State, Context, AllContexts>;
+/** Create a UILive functional component. */
+declare const createLive: <Props extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) => UILiveFunction<Props, State, Remote, AllContexts>;
 /** There are two ways you can use this:
  * 1. Call this to give basic UILive features with types for Props and such being empty.
  *      * For example: `class MyMix extends UILiveMixin(MyBase) {}`
@@ -735,27 +749,38 @@ declare class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData e
      * .... But when using contexts for tunneling, sometimes wants to talkback to parent with actions or share part of the context. */
     overriddenContexts?: Record<string, UIContext | null>;
     constructor(boundary: UILiveSource<AllContexts, ContextData>);
+    /** Set whether a specific action is needed or not. If has put actionNeeds to true for the whole context, makes no difference. */
     needsAction(contextName: keyof AllContexts & string, actionType: string, needs?: boolean): void;
     /** Set action needs as a whole.
-     * - If actionTypes is a boolean, functions in reset mode regardless of the reset setting.
-     * - In reset mode, resets the actionNeeds to given set or boolean.
-     * - Otherwise modifies the actionNeeds by adding new entries into it. (Cannot be used to remove many.) */
+     * - If actionTypes is a boolean, functions in reset mode regardless of the extend setting.
+     * - Otherwise modifies the actionNeeds by adding new entries into it. (Cannot be used to remove many.)
+     *     * If extend is false, resets the actionNeeds to the given set. (This way can remove others.)
+     * - Note that this never modifies the other contexts.
+     */
     needsActions(contextName: keyof AllContexts & string, actionTypes?: string[] | boolean, extend?: boolean): void;
+    /** Set actions for multiple contexts in one go.
+     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds.
+     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context. */
+    needsActionsBy(namedNeeds: Record<keyof AllContexts & string, boolean | string[]>, extendWithinContext?: boolean, extendForAll?: boolean): void;
     /** Use this to set the optional data refresh keys - resets the current keys for that context.
      * - There can be one or many keywords, or true to allow anything (default). If false, then removes needs.
-     * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "." */
-    needsContext(name: string, needs?: boolean | string | string[], refreshIfChanged?: boolean): void;
-    /** This resets the needs by the given record. */
-    needsContexts(needs: Record<string, boolean | string | string[]>, refreshIfChanged?: boolean): void;
-    /** If undefined, will remove the overridden state. Returns whether contextual refresh should be made. */
+     * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "."
+     * - Returns boolean to indicate whether did change or not. Useful for custom refreshing purposes. */
+    needsData(name: string, needs?: boolean | string | string[], refreshIfChanged?: boolean): boolean;
+    /** This extends the needs by the given record, or if extend is false resets the whole needs.
+     * - Note that if you want to remove all needs, call with `.needsDataBy({}, false)`
+     * - Returns boolean to indicate whether did change or not. Useful for custom refreshing purposes. */
+    needsDataBy(needs: Record<string, boolean | string | string[]>, extend?: boolean, refreshIfChanged?: boolean): boolean;
+    /** If undefined, will remove the overridden state. Returns flags for whether contextual refresh should be made. */
     overrideContext(name: string, context: UIContext | null | undefined, refresh?: boolean): UIContextRefresh;
+    /** Override multiple contexts in one go. Returns flags for whether contextual refresh should be made. */
     overrideContexts(contexts: Record<string, UIContext | null | undefined>, refresh?: boolean): UIContextRefresh;
     /** Returns undefined if not found, otherwise UIContext | null. */
     getContext(name: string, onlyTypes?: UIContextAttach): UIContext | null | undefined;
     /** Get contexts by types. Give flags to allow only certain types, see UIContextAttach flags. */
     getContexts(onlyNames?: RecordableType<keyof AllContexts & string> | null, onlyTypes?: UIContextAttach): Record<string, UIContext | null>;
-    updateContext(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
-    rebuildContext(): void;
+    updateRemote(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
+    rebuildRemote(): void;
 }
 
 declare class UIContentApi {
@@ -872,12 +897,12 @@ declare class UIContentBoundary extends UIBaseBoundary {
 /** This is what "contains" a component (= a uiDom class instance or a uiDom render function).
  * .. It's the common interface for technical as well as advanced API interfacing. */
 declare class UISourceBoundary extends UIBaseBoundary {
-    /** Implies if has ever rendered yet.
+    /** If true means that has not ever rendered yet.
      * .. Needed for LiveFunctions to know if should call .onContextChange right after first render.
      * .. Because with the double render function, it's the first render call where things are initialized. */
-    _isVirgin?: true;
+    _notRendered?: true;
     /** Temporary rendering state indicator. */
-    _renderingState?: "active" | "re-updated";
+    _renderState?: "active" | "re-updated";
     /** Temporary collection of preUpdates - as the update data are always executed immediately. */
     _preUpdates?: UILiveNewUpdates;
     /** Our uiHost based quick id. It's mainly used for sorting, and sometimes to detect whether is content or source boundary, helps in debugging too. */
@@ -896,22 +921,22 @@ declare class UISourceBoundary extends UIBaseBoundary {
      *   .. This is by declaring your callbacks once (in the initializer), and being able to use this.props for fresh props.
      * - Contains one callable method .setUpdateMode and one optional overrideable .shouldUpdate(prevProps, nextProps) */
     mini?: UIMini | UIWired;
-    /** Has a contentClosure if there were any content passed to us. */
-    contentClosure: UIContentClosure;
+    /** Has a closure if there were any content passed to us. */
+    closure: UIContentClosure;
     constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: UITreeNode, sourceBoundary?: UISourceBoundary);
     reattach(clear?: boolean): void;
     update(forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     updateBy(updates: UILiveNewUpdates, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     render(iRecursion?: number): UIRenderOutput;
 }
-interface UILiveSource<AllContexts extends UIAllContexts = {}, ContextData extends Dictionary = {}> extends UISourceBoundary {
-    contextApi: UIContextApi<AllContexts, ContextData>;
-    live: UILive<{}, {}, ContextData, AllContexts, {}>;
+interface UILiveSource<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}> extends UISourceBoundary {
+    contextApi: UIContextApi<AllContexts, Remote>;
+    live: UILive<{}, {}, Remote, AllContexts, {}>;
 }
 
 declare const UIRef_base: {
     new (...args: any[]): {
-        attachedTo: Set<UITreeNode>;
+        treeNodes: Set<UITreeNode>;
         /** This gets the last reffed treeNode.
          * - It works as if the behaviour was to always override with the last one.
          * - Except that if the last one is removed, falls back to earlier existing. */
@@ -936,7 +961,7 @@ declare const UIRef_base: {
 interface UIRef<Type extends Node | UISourceBoundary = Node | UISourceBoundary> {
     /** The collection (for clarity) of tree nodes where is attached to.
      * It's not needed internally but might be useful for custom needs. */
-    attachedTo: Set<UITreeNode>;
+    treeNodes: Set<UITreeNode>;
     /** This gets the last reffed treeNode.
      * - It works as if the behaviour was to always override with the last one.
      * - Except that if the last one is removed, falls back to earlier existing. */
@@ -1156,7 +1181,7 @@ declare type UIPostTag = "" | "_" | UIDomTag | UIBoundaryTag | null;
 /** This tag conversion is used for internal tag based def mapping. The UIDefTarget is the uiDom.ContentPass. */
 declare type UIDefKeyTag = UIPostTag | UIDefTarget | typeof UIFragment | UIHost;
 declare type UIMiniFunction<Props = {}> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
-declare type UILiveFunction<Props = {}, State = {}, Context = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Context, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Context, AllContexts>;
+declare type UILiveFunction<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
 declare type UILiveComponent<Props = {}, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
 declare type UISpreadFunction<Props = {}> = (props: Props) => UIRenderOutput;
 declare type UIFunction<Props = {}> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
@@ -1206,10 +1231,10 @@ declare type UIUponAction<Context extends UIContext = UIContext> = (action: Cont
 declare type UIUponQuestion<Context extends UIContext = UIContext, Question extends Context["Actions"] & UIQuestion = Context["Actions"] & UIQuestion> = (question: Question & {
     value?: Question["value"];
 }, context: Context) => Question["value"];
-/** Action pre-listener - run immediately on dispatch.
+/** Action pre-listener - run immediately on sending an action / asking a question.
  * - If returns false, the action will be cancelled from the normal flow (just pre-listeners).
  * - If returns true, the action will be marked as a post action, and called after the update-n-render cycle.
- * - Note that the return value is ignored for questions: if called with dispatchQuestion or dispatchQuestionary.
+ * - Note that the return value is ignored for questions: if called with askQuestion or askQuestionary.
  *   .. This is because the questions are always asked. But in case you need to log the questions, so uses the same route.
  * - Note that if many assigned and many answer, the importance hierarchy is: "cancel" > "post" > "quick" (and likewise in regards to settings). */
 declare type UIUponPreAction<Context extends UIContext = UIContext> = (action: Context["Actions"], context: Context) => "cancel" | "post" | "quick" | "" | void;
@@ -1261,7 +1286,7 @@ declare type UIRenderOutput = UIRenderOutputSingle | UIRenderOutputMulti;
 interface UILiveUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}, Context extends Dictionary = {}> {
     props?: Props;
     state?: State;
-    context?: Context;
+    remote?: Context;
     children?: UIDefTarget[];
 }
 interface UILiveNewUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}> {
@@ -1287,7 +1312,7 @@ declare type UIUpdateCompareMode = "always" | "changed" | "shallow" | "double" |
 interface UIUpdateCompareModesBy {
     props: UIUpdateCompareMode;
     state: UIUpdateCompareMode;
-    context: UIUpdateCompareMode;
+    remote: UIUpdateCompareMode;
     children: UIUpdateCompareMode;
 }
 /** Differences made to a dom element.
@@ -1377,7 +1402,7 @@ interface UIDefBase<Props extends UIGenericPostProps = UIGenericPostProps> {
     domPortal?: Node | null;
     contentPass?: UIContentClosure | null;
     contentPassType?: "pass" | "copy";
-    contexts?: UIAllContextsWithNull | null;
+    contexts?: Record<string, UIContext | null> | null;
     host?: UIHost;
     treeNode?: UITreeNode;
 }
@@ -1435,7 +1460,7 @@ interface UIDefPass extends UIDefBase {
 interface UIDefContexts extends UIDefBase {
     _uiDefType: "contexts";
     tag: null;
-    contexts: UIAllContextsWithNull | null;
+    contexts: Record<string, UIContext | null> | null;
     props?: never;
 }
 interface UIDefHost extends UIDefBase {
@@ -1586,22 +1611,22 @@ interface UIHostSettings {
     shouldUpdateWithNothing: boolean;
     /** Defines what components should look at when doing uiShouldUpdate check.
      * By default looks in all 4 places for change: 1. Props, 2. State, 3. Context, 4. Children.
-     * .. However, most of them will be empty, and Context and Children will only be there if specifically asked for by needsChildren or needsContexts. */
+     * .. However, most of them will be empty, and Context and Children will only be there if specifically asked for by needsChildren or needsData. */
     updateLiveModes: UIUpdateCompareModesBy;
     /** Defines how mini functional components should update. See UIUpdateCompareMode for details. */
     updateMiniMode: UIUpdateCompareMode;
     /** Whether does a equalDomProps check on the updating process.
      * - If true: Only adds render info (for updating dom props) if there's a need for it.
      * - If false: Always adds render info for updating dom elements. They will be diffed anyhow.
-     * - If "contextual": Then marks to be updated if had other rendering needs (move or content), if not then does equalDomProps check.
+     * - If "if-needed": Then marks to be updated if had other rendering needs (move or content), if not then does equalDomProps check.
      * Note that there is always a diffing check before applying dom changes, and the process only applies changes from last set.
      * .. In other words, this does not change at all what gets applied to the dom.
      * .. The only thing this changes, is whether includes an extra equalDomProps -> boolean run during the update process.
      * .. In terms of assumed performance:
      * .... Even though equalDomProps is an extra process, it's a bit faster to run than collecting diffs and in addition it can stop short - never add render info.
      * .... However, the only time it stops short is for not-equal, in which case it also means that we will anyway do the diff collection run later on.
-     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is "contextual". */
-    preEqualCheckDomProps: boolean | "contextual";
+     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is "if-needed". */
+    preEqualCheckDomProps: boolean | "if-needed";
     /** The maximum number of times a boundary is allowed to be render during an update due to update calls during the render func.
      * .. If negative, then there's no limit. If 0, then doesn't allow to re-render. The default is 1: allow to re-render once (so can render twice in a row).
      * .. If reaches the limit, stops re-rendering and logs a warning if devLogToConsole has .Warnings on. */
@@ -1697,27 +1722,18 @@ declare type NameValidator<Valid extends string, Input> = [
  * - Note however, that the typing support is made for 10 arguments max. Anything after that uses a common type ...T[], so it will get buggy in various ways.
  */
 declare type ValidateNames<Valid extends string> = <T1 extends NameValidator<Valid, T1>, T2 extends NameValidator<Valid, T2>, T3 extends NameValidator<Valid, T3>, T4 extends NameValidator<Valid, T4>, T5 extends NameValidator<Valid, T5>, T6 extends NameValidator<Valid, T6>, T7 extends NameValidator<Valid, T7>, T8 extends NameValidator<Valid, T8>, T9 extends NameValidator<Valid, T9>, T10 extends NameValidator<Valid, T10>, Tn extends NameValidator<Valid, Tn>>(t1?: T1, t2?: T2, t3?: T3, t4?: T4, t5?: T5, t6?: T6, t7?: T7, t8?: T8, t9?: T9, t10?: T10, ...tn: Tn[]) => string;
-declare type SafeIteratorDepth = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-declare type SafeIteratorDepthDefault = 10;
-declare type NestedJoin<K, P> = K extends string | number ? P extends string | number ? `${K}${"" extends P ? "" : "."}${P}` : never : never;
-declare type NestedPrev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ...0[]];
-/** Get nested paths and leaves from data, eg. "themes" | "themes.color" | "themes.style" */
-declare type NestedPathsBy<T, NotAllowed = never, D extends SafeIteratorDepth = SafeIteratorDepthDefault> = [D] extends [never] ? never : T extends object ? {
-    [K in keyof T]-?: K extends string | number ? T[K] extends NotAllowed ? never : K | NestedJoin<K, NestedPathsBy<T[K], NotAllowed, NestedPrev[D]>> : never;
-}[keyof T] : "";
-declare type NestedPaths<T> = NestedPathsBy<T, NonDictionary, SafeIteratorDepthDefault>;
 
 declare class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps> {
     static UI_DOM_TYPE: string;
-    static instanced: Set<UISourceBoundary>;
+    static boundaries: Set<UISourceBoundary>;
     static source: UIComponent;
     static builder: ((...params: any[]) => Dictionary) | null;
     static mixer: ((baseProps: Dictionary, addsProps: Dictionary, ...params: any[]) => Dictionary) | null;
     static props: Dictionary;
     static refresh(_update?: boolean, _forceUpdateTimeout?: number | null, _forceRenderTimeout?: number | null): void;
-    static updateWired(_forceUpdateTimeout?: number | null, _forceRenderTimeout?: number | null): void;
+    static update(_forceUpdateTimeout?: number | null, _forceRenderTimeout?: number | null): void;
     static setProps(_props: Dictionary, _update?: boolean, _forceUpdateTimeout?: number | null, _forceRenderTimeout?: number | null): void;
-    static getWiredProps(): Record<string, any>;
+    static getAddedProps(): Record<string, any>;
     static getMixedProps(_props: Dictionary): Record<string, any>;
     static updateMode: UIUpdateCompareMode | null;
     static shouldUpdate?(preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
@@ -1731,20 +1747,25 @@ declare type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps
     new (_props?: BaseProps | null): UIWired<BaseProps>;
     readonly UI_DOM_TYPE: "Wired";
     /** The currently instanced boundaries that have a QWire class instance as their boundary.mini. */
-    instanced: Set<UISourceBoundary>;
+    boundaries: Set<UISourceBoundary>;
     source: UIComponent;
     builder: Builder | null;
     mixer: Mixer | null;
     props: WiredProps;
-    getWiredProps(): WiredProps;
+    /** Default update mode.
+     * - By default, we are in "always" mode, because this is an intermediary boundary: each wired target will anyway do its checking.
+     * - This is to prevent rare cases where would feel like a bug - without having to go deep into the docs or code to find out why. */
+    updateMode: UIUpdateCompareMode | null;
+    getAddedProps(): WiredProps;
     getMixedProps(props: BaseProps): MixedProps;
-    /** Call this to rebuild the wired part of props and force a refresh on the instances. */
+    /** Call this to rebuild the wired part of props and force a refresh on the instances.
+     * If the props stay the same, you should have update = "force", or rather just call update directly if you know there's no builder. */
     refresh(update?: boolean | "force", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
-    updateWired(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
+    /** Call to trigger the updates for all instances. */
+    update(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     /** Call this to manually update the wired part of props and force a refresh.
      * - This is most often called by the static refresh method above, with props coming from Wired.builder. */
     setProps(props: WiredProps, update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
-    updateMode: UIUpdateCompareMode | null;
     shouldUpdate?(preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
     wiredDidMount?(wired: UIWired<BaseProps>, boundary: UISourceBoundary): void;
     wiredWillUnmount?(wired: UIWired<BaseProps>, boundary: UISourceBoundary): void;
@@ -1767,10 +1788,6 @@ declare const UIEffect_base: {
         /** Cancel effect. */
         cancel(skipUnmount?: boolean, clearEffect?: boolean): void;
         constructor: Function;
-        /** Alias for .useWith with default depth.
-         * - Stores the memory and performs a shallow check against previous and returns true if changed.
-         * - If newEffectIfChanged is not undefined, overrides the effect (only if was changed) right before calling the effect.
-         * - Note that you don't need to have an effect assigned at all: you can also use the returned boolean and run your "effect" inline. */
         toString(): string;
         toLocaleString(): string;
         valueOf(): Object;
@@ -1801,8 +1818,7 @@ interface UIEffect<Memory = any> {
     /** Comparison mode to be used by default. (Defaults to 1, which is the same as "shallow".) */
     depth: number | UIUpdateCompareMode;
     /** Alias for .use, that requires a function. (Do not use this, if you can reuse a function.)
-     * - Note that if you can reuse a function all the time, you should.
-     * .. There's no point declaring a new one every time in vain.
+     * - Note that if you can reuse a function all the time, you should. (There's no point declaring a new one every time in vain.)
      * - Note that you can also call .update(mem), and if it returns true, then do your effect inline.  */
     reset(effect: (() => void) | null, memory: Memory, forceRun?: boolean): boolean;
     /** Alias for .useWith with default depth.
@@ -1883,7 +1899,7 @@ declare const uiDom: {
     /** Create a new UIHost to orchestrate rendering. */
     createHost: (content?: UIRenderOutput, container?: HTMLElement | null | undefined, settings?: UIHostSettingsUpdate | null | undefined) => UIHost;
     /** Create a new context. */
-    createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: UIContextSettingsUpdate | undefined) => UIContext<Data, Actions>;
+    createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: UIContextSettingsUpdate<Actions["type"] & string> | undefined) => UIContext<Data, Actions>;
     /** Create multiple named contexts. (Useful for tunneling.) */
     createContexts: <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts]: Contexts[Name_2]["data"]; }>(contextsData: AllData) => Contexts;
     /** Create ref. */
@@ -1907,13 +1923,17 @@ declare const uiDom: {
         unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[], keyScope: any): UIDefTarget | null;
     };
     /** Create a LiveFunction omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
-    createLive: <Props_1 extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Context extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Context, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Context, AllContexts>) => UILiveFunction<Props_1, State, Context, AllContexts>;
+    createLive: <Props_1 extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Remote, AllContexts>) => UILiveFunction<Props_1, State, Remote, AllContexts>;
     /** Create a LiveFunction omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
-    live: <Props_1 extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Context extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Context, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Context, AllContexts>) => UILiveFunction<Props_1, State, Context, AllContexts>;
+    live: <Props_1 extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Remote, AllContexts>) => UILiveFunction<Props_1, State, Remote, AllContexts>;
+    /** Create a LiveFunction as <Contexts, Remote, Props, State> and omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
+    createLiveBy: <AllContexts_1 extends UIAllContexts = {}, Remote_1 extends Dictionary<string, any> = {}, Props_2 extends Dictionary<string, any> = {}, State_1 extends Dictionary<string, any> = {}>(func: (q: UILive<Props_2, State_1, Remote_1, AllContexts_1, AllContexts_1[keyof AllContexts_1]["Actions"]>, props: Props_2) => UIRenderOutput | UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>) => UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>;
+    /** Create a LiveFunction as <Contexts, Remote, Props, State> and omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
+    liveBy: <AllContexts_1 extends UIAllContexts = {}, Remote_1 extends Dictionary<string, any> = {}, Props_2 extends Dictionary<string, any> = {}, State_1 extends Dictionary<string, any> = {}>(func: (q: UILive<Props_2, State_1, Remote_1, AllContexts_1, AllContexts_1[keyof AllContexts_1]["Actions"]>, props: Props_2) => UIRenderOutput | UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>) => UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>;
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */
-    createMini: <Props_2 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_2>, props: Props_2) => UIRenderOutput | UIMiniFunction<Props_2>) => UIMiniFunction<Props_2>;
+    createMini: <Props_3 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */
-    mini: <Props_2 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_2>, props: Props_2) => UIRenderOutput | UIMiniFunction<Props_2>) => UIMiniFunction<Props_2>;
+    mini: <Props_3 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
     /** Creates a wired renderer.
      * - Technically creates a class that behaves like UILive (or actually more like UIMiniFunction as a class).
      *     1. This class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
@@ -1937,9 +1957,9 @@ declare const uiDom: {
      */
     wired: <BaseProps extends Dictionary<string, any> = {}, WiredProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps>(funcOrClass: UIComponent<MixedProps>, builderOrProps?: WiredProps | Builder | null | undefined, mixer?: Mixer | undefined, ...params: Params) => UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
     /** Create a new def, like React.createElement(). Can feed JSX input. */
-    createDef: <Props_3 extends Dictionary<string, any> = {}>(tagOrClass?: UIPreTag, origProps?: UIGenericProps<Props_3> | null, ...contents: UIRenderOutput[]) => UIDefTarget | null;
+    createDef: <Props_4 extends Dictionary<string, any> = {}>(tagOrClass?: UIPreTag, origProps?: UIGenericProps<Props_4> | null, ...contents: UIRenderOutput[]) => UIDefTarget | null;
     /** Alias for createDef for brevity. */
-    def: <Props_3 extends Dictionary<string, any> = {}>(tagOrClass?: UIPreTag, origProps?: UIGenericProps<Props_3> | null, ...contents: UIRenderOutput[]) => UIDefTarget | null;
+    def: <Props_4 extends Dictionary<string, any> = {}>(tagOrClass?: UIPreTag, origProps?: UIGenericProps<Props_4> | null, ...contents: UIRenderOutput[]) => UIDefTarget | null;
     /** Returns a single html element.
      * - If a wrapInTag given will use it as a container.
      * - Otherwise, if the string refers to multiple, returns an element containing them (with settings.renderInnerHtmlTag).
@@ -1982,4 +2002,4 @@ declare const uiDom: {
     range: (lengthOrStart: number, end?: number | undefined, stepSize?: number) => number[];
 };
 
-export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, Dictionary, DomElement, HTMLAttributes, HTMLAttributesAll, HTMLAttributesWithStyle, HTMLElementType, HTMLListenerAttributeNames, HTMLListenerAttributes, HTMLListenerAttributesAll, HTMLTags, NameValidator, NestedPaths, NestedPathsBy, NonDictionary, NullLike, PropType, RecordableType, RenderTextContentCallback, RenderTextTag, RenderTextTagCallback, SafeIteratorDepth, SafeIteratorDepthDefault, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBoundaryTag, UIChangeInfos, UICloneNodeBehaviour, UIComponent, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHTMLPostProps, UIHTMLProps, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createHost, createLive, createMini, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };
+export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, Dictionary, DomElement, HTMLAttributes, HTMLAttributesAll, HTMLAttributesWithStyle, HTMLElementType, HTMLListenerAttributeNames, HTMLListenerAttributes, HTMLListenerAttributesAll, HTMLTags, NameValidator, NonDictionary, NullLike, PropType, RecordableType, RenderTextContentCallback, RenderTextTag, RenderTextTagCallback, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBoundaryTag, UIChangeInfos, UICloneNodeBehaviour, UIComponent, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHTMLPostProps, UIHTMLProps, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createHost, createLive, createMini, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };

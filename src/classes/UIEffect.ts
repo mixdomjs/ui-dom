@@ -100,8 +100,7 @@ export interface UIEffect<Memory = any> {
     depth: number | UIUpdateCompareMode;
 
     /** Alias for .use, that requires a function. (Do not use this, if you can reuse a function.)
-     * - Note that if you can reuse a function all the time, you should.
-     * .. There's no point declaring a new one every time in vain.
+     * - Note that if you can reuse a function all the time, you should. (There's no point declaring a new one every time in vain.)
      * - Note that you can also call .update(mem), and if it returns true, then do your effect inline.  */
     reset(effect: (() => void) | null, memory: Memory, forceRun?: boolean): boolean;
 

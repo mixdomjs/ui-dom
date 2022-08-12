@@ -21,11 +21,11 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
 
         public static UI_DOM_TYPE = "Ref";
 
-        public attachedTo: Set<UITreeNode>;
+        public treeNodes: Set<UITreeNode>;
 
         constructor(...args: any[]) {
             super(...args);
-            this.attachedTo = new Set();
+            this.treeNodes = new Set();
         }
 
 
@@ -35,16 +35,16 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
          * - It works as if the behaviour was to always override with the last one.
          * - Except that if the last one is removed, falls back to earlier existing. */
         public getTreeNode(): UITreeNode | null {
-            return [...this.attachedTo][this.attachedTo.size - 1] || null;
+            return [...this.treeNodes][this.treeNodes.size - 1] || null;
         }
         public getTreeNodes(): UITreeNode[] {
-            return [...this.attachedTo];
+            return [...this.treeNodes];
         }
         public getDomNode(onlyForDomRefs: boolean = false): Type & Node | null {
-            let i = this.attachedTo.size - 1;
-            const attachedTo = [...this.attachedTo];
+            let i = this.treeNodes.size - 1;
+            const treeNodes = [...this.treeNodes];
             while (i >= 0) {
-                const treeNode = attachedTo[i];
+                const treeNode = treeNodes[i];
                 if (treeNode.domNode && (!onlyForDomRefs || treeNode.type === "dom"))
                     return treeNode.domNode as Type & Node;
             }
@@ -52,7 +52,7 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
         }
         public getDomNodes(onlyForDomRefs: boolean = false): Array<Type & Node> {
             let nodes: Array<Type & Node> = [];
-            for (const treeNode of this.attachedTo) {
+            for (const treeNode of this.treeNodes) {
                 if (!treeNode.domNode)
                     continue;
                 if (treeNode.type === "dom")
@@ -63,12 +63,12 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
             return nodes;
         }
         public getRefBoundary(): Type & UISourceBoundary | null {
-            const lastRef = [...this.attachedTo][this.attachedTo.size - 1];
+            const lastRef = [...this.treeNodes][this.treeNodes.size - 1];
             return lastRef && lastRef.type === "boundary" && lastRef.boundary as (Type & UISourceBoundary) || null;
         }
         public getRefBoundaries(): Array<Type & UISourceBoundary> {
             const boundaries: Array<Type & UISourceBoundary> = [];
-            for (const treeNode of this.attachedTo)
+            for (const treeNode of this.treeNodes)
                 if (treeNode.type === "boundary" && treeNode.boundary)
                     boundaries.push(treeNode.boundary as (Type & UISourceBoundary));
             return boundaries;
@@ -80,10 +80,10 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
         // Override.
         static didAttachOn(ref: UIRef, treeNode: UITreeNode) {
             // Already mounted.
-            if (ref.attachedTo.has(treeNode))
+            if (ref.treeNodes.has(treeNode))
                 return;
             // Add.
-            ref.attachedTo.add(treeNode);
+            ref.treeNodes.add(treeNode);
             // Call.
             if (treeNode.type === "dom") {
                 if (ref.domDidAttach && treeNode.domNode)
@@ -98,7 +98,7 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
         // Override.
         static willDetachFrom(ref: UIRef, treeNode: UITreeNode) {
             // Call, if was mounted.
-            if (ref.attachedTo.has(treeNode)) {
+            if (ref.treeNodes.has(treeNode)) {
                 if (treeNode.type === "dom") {
                     if (ref.domWillDetach && treeNode.domNode)
                         ref.domWillDetach(treeNode.domNode);
@@ -109,7 +109,7 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
                 }
             }
             // Remove.
-            ref.attachedTo.delete(treeNode);
+            ref.treeNodes.delete(treeNode);
         }
     }
 }
@@ -117,7 +117,7 @@ export interface UIRef<Type extends Node | UISourceBoundary = Node | UISourceBou
 
     /** The collection (for clarity) of tree nodes where is attached to.
      * It's not needed internally but might be useful for custom needs. */
-    attachedTo: Set<UITreeNode>;
+    treeNodes: Set<UITreeNode>;
 
     // - Getters - //
 

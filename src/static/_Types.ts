@@ -174,7 +174,7 @@ export type UIDefKeyTag = UIPostTag | UIDefTarget | typeof UIFragment | UIHost;
 // - Component & Boundary - //
 
 export type UIMiniFunction<Props = {}> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
-export type UILiveFunction<Props = {}, State = {}, Context = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Context, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Context, AllContexts>;
+export type UILiveFunction<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
 export type UILiveComponent<Props = {}, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
 export type UISpreadFunction<Props = {}> = (props: Props) => UIRenderOutput;
 export type UIFunction<Props = {}> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
@@ -216,10 +216,10 @@ export type UIUponAction<Context extends UIContext = UIContext> = (action: Conte
  * - Should return a valid answer to the question. */
 export type UIUponQuestion<Context extends UIContext = UIContext, Question extends Context["Actions"] & UIQuestion = Context["Actions"] & UIQuestion> = (question: Question & { value?: Question["value"]}, context: Context) => Question["value"];
 
-/** Action pre-listener - run immediately on dispatch.
+/** Action pre-listener - run immediately on sending an action / asking a question.
  * - If returns false, the action will be cancelled from the normal flow (just pre-listeners).
  * - If returns true, the action will be marked as a post action, and called after the update-n-render cycle.
- * - Note that the return value is ignored for questions: if called with dispatchQuestion or dispatchQuestionary.
+ * - Note that the return value is ignored for questions: if called with askQuestion or askQuestionary.
  *   .. This is because the questions are always asked. But in case you need to log the questions, so uses the same route.
  * - Note that if many assigned and many answer, the importance hierarchy is: "cancel" > "post" > "quick" (and likewise in regards to settings). */
 export type UIUponPreAction<Context extends UIContext = UIContext> = (action: Context["Actions"], context: Context) => "cancel" | "post" | "quick" | "" | void;
@@ -285,7 +285,7 @@ export type UIRenderOutput = UIRenderOutputSingle | UIRenderOutputMulti;
 export interface UILiveUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}, Context extends Dictionary = {}> {
     props?: Props;
     state?: State;
-    context?: Context;
+    remote?: Context;
     children?: UIDefTarget[];
 }
 export interface UILiveNewUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}> {
@@ -312,7 +312,7 @@ export type UIUpdateCompareMode = "always" | "changed" | "shallow" | "double" | 
 export interface UIUpdateCompareModesBy {
     props: UIUpdateCompareMode;
     state: UIUpdateCompareMode;
-    context: UIUpdateCompareMode;
+    remote: UIUpdateCompareMode;
     children: UIUpdateCompareMode;
 }
 
@@ -431,7 +431,7 @@ interface UIDefBase<Props extends UIGenericPostProps = UIGenericPostProps> {
     contentPass?: UIContentClosure | null;
     contentPassType?: "pass" | "copy";
     // .. Context.
-    contexts?: UIAllContextsWithNull | null;
+    contexts?: Record<string, UIContext | null> | null;
     // .. Host.
     host?: UIHost;
 
@@ -493,7 +493,7 @@ export interface UIDefPass extends UIDefBase {
 export interface UIDefContexts extends UIDefBase {
     _uiDefType: "contexts";
     tag: null;
-    contexts: UIAllContextsWithNull | null;
+    contexts: Record<string, UIContext | null> | null;
     props?: never;
 }
 export interface UIDefHost extends UIDefBase {
@@ -670,7 +670,7 @@ export interface UIHostSettings {
 
     /** Defines what components should look at when doing uiShouldUpdate check.
      * By default looks in all 4 places for change: 1. Props, 2. State, 3. Context, 4. Children.
-     * .. However, most of them will be empty, and Context and Children will only be there if specifically asked for by needsChildren or needsContexts. */
+     * .. However, most of them will be empty, and Context and Children will only be there if specifically asked for by needsChildren or needsData. */
     updateLiveModes: UIUpdateCompareModesBy;
 
     /** Defines how mini functional components should update. See UIUpdateCompareMode for details. */
@@ -679,15 +679,15 @@ export interface UIHostSettings {
     /** Whether does a equalDomProps check on the updating process.
      * - If true: Only adds render info (for updating dom props) if there's a need for it.
      * - If false: Always adds render info for updating dom elements. They will be diffed anyhow.
-     * - If "contextual": Then marks to be updated if had other rendering needs (move or content), if not then does equalDomProps check.
+     * - If "if-needed": Then marks to be updated if had other rendering needs (move or content), if not then does equalDomProps check.
      * Note that there is always a diffing check before applying dom changes, and the process only applies changes from last set.
      * .. In other words, this does not change at all what gets applied to the dom.
      * .. The only thing this changes, is whether includes an extra equalDomProps -> boolean run during the update process.
      * .. In terms of assumed performance:
      * .... Even though equalDomProps is an extra process, it's a bit faster to run than collecting diffs and in addition it can stop short - never add render info.
      * .... However, the only time it stops short is for not-equal, in which case it also means that we will anyway do the diff collection run later on.
-     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is "contextual". */
-    preEqualCheckDomProps: boolean | "contextual";
+     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is "if-needed". */
+    preEqualCheckDomProps: boolean | "if-needed";
 
     /** The maximum number of times a boundary is allowed to be render during an update due to update calls during the render func.
      * .. If negative, then there's no limit. If 0, then doesn't allow to re-render. The default is 1: allow to re-render once (so can render twice in a row).
@@ -878,41 +878,43 @@ export type ValidateNames<Valid extends string> = <
 // - Algoritm alternative: Get dotted keys - //
 //
 // These are thanks to jcalz at: https://stackoverflow.com/questions/58434389/typescript-deep-keyof-of-a-nested-object
-
-export type SafeIteratorDepth = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-export type SafeIteratorDepthDefault = 10;
-
-type NestedJoin<K, P> = K extends string | number ?
-    P extends string | number ?
-        `${K}${"" extends P ? "" : "."}${P}`
-        : never
-    : never
-;
-
-// Max 20, if gives higher, it's 0.
-// .. This works by having an offset of 1: the first item is never, then 0, 1, 2, ...
-// .. So each time we get with a number, we get one smaller, until we hit never.
-type NestedPrev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ...0[]];
-
-/** Get nested paths and leaves from data, eg. "themes" | "themes.color" | "themes.style" */
-export type NestedPathsBy<T, NotAllowed = never, D extends SafeIteratorDepth = SafeIteratorDepthDefault> = [D] extends [never] ? never : T extends object ?
-    { [K in keyof T]-?: K extends string | number ?
-        T[K] extends NotAllowed ?
-            never
-            : K | NestedJoin<K, NestedPathsBy<T[K], NotAllowed, NestedPrev[D]>>
-        : never
-    }[keyof T] : ""
-;
-export type NestedPaths<T> = NestedPathsBy<T, NonDictionary, SafeIteratorDepthDefault>;
-
+//
+// export type SafeIteratorDepth = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+// export type SafeIteratorDepthDefault = 10;
+//
+// type NestedJoin<K, P> = K extends string | number ?
+//     P extends string | number ?
+//         `${K}${"" extends P ? "" : "."}${P}`
+//         : never
+//     : never
+// ;
+//
+// // Max 20, if gives higher, it's 0.
+// // .. This works by having an offset of 1: the first item is never, then 0, 1, 2, ...
+// // .. So each time we get with a number, we get one smaller, until we hit never.
+// type NestedPrev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ...0[]];
+//
+// /** Get nested paths and leaves from data, eg. "themes" | "themes.color" | "themes.style" */
+// export type NestedPathsBy<T, NotAllowed = never, D extends SafeIteratorDepth = SafeIteratorDepthDefault> = [D] extends [never] ? never : T extends object ?
+//     { [K in keyof T]-?: K extends string | number ?
+//         T[K] extends NotAllowed ?
+//             never
+//             : K | NestedJoin<K, NestedPathsBy<T[K], NotAllowed, NestedPrev[D]>>
+//         : never
+//     }[keyof T] : ""
+// ;
+// export type NestedPaths<T> = NestedPathsBy<T, NonDictionary, SafeIteratorDepthDefault>;
+//
 // /** Get nested leaves only from data, eg. "themes.color" | "themes.style" - but not "themes" as it's not a leaf. */
 // export type NestedLeaves<T, NotAllowed = never, D extends SafeIteratorDepth = SafeIteratorDepthDefault> = [D] extends [never] ? never : T extends object ?
 //     { [K in keyof T]-?: T[K] extends NotAllowed ? {} : NestedJoin<K, NestedLeaves<T[K], NotAllowed, NestedPrev[D]>> }[keyof T]
 //     : ""
 // ;
+//
+// <-- Unfortunately this is too heavy. It gets heavy when extending a class using this, or in mixin use.
 
 
-// - Algoritm alternatives - //
+// - More algoritm alternatives - //
 //
 // Example 1: https://stackoverflow.com/questions/47057649/typescript-string-dot-notation-of-nested-object
 //

@@ -16,7 +16,7 @@ import { createEffect, UIEffect, UIEffectMixin } from "./classes/UIEffect";
 import { createRef, UIRef, UIRefMixin } from "./classes/UIRef";
 import { createMini, UIMini, UIMiniMixin } from "./classes/UIMini";
 import { createWired } from "./classes/UIWired";
-import { createLive, UILive, UILiveMixin } from "./classes/UILive";
+import { createLive, createLiveBy, UILive, UILiveMixin } from "./classes/UILive";
 import { createHost, UIHost, UIHostMixin } from "./classes/UIHost";
 import { createContext, createContexts, UIContext, UIContextMixin, UIContexts } from "./classes/UIContext";
 
@@ -115,6 +115,10 @@ export const uiDom = {
     createLive,
     /** Create a LiveFunction omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
     live: createLive,
+    /** Create a LiveFunction as <Contexts, Remote, Props, State> and omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
+    createLiveBy,
+    /** Create a LiveFunction as <Contexts, Remote, Props, State> and omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
+    liveBy: createLiveBy,
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */
     createMini,
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */

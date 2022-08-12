@@ -40,8 +40,10 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
 
     // - Actions - //
 
-    public needsAction(contextName: keyof AllContexts & string, actionType: string, needs: boolean = true): void { // , refreshIfChanged: boolean = false) {
-        // Force at full.
+    /** Set whether a specific action is needed or not. If has put actionNeeds to true for the whole context, makes no difference. */
+    public needsAction(contextName: keyof AllContexts & string, actionType: string, needs: boolean = true): void {
+        // All actions forced at full for this context.
+        // .. So makes no difference what sets to a single action.
         const myNeeds = this.actionNeeds.get(contextName);
         if (myNeeds === true)
             return;
@@ -68,16 +70,18 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
     }
 
     /** Set action needs as a whole.
-     * - If actionTypes is a boolean, functions in reset mode regardless of the reset setting.
-     * - In reset mode, resets the actionNeeds to given set or boolean.
-     * - Otherwise modifies the actionNeeds by adding new entries into it. (Cannot be used to remove many.) */
-    public needsActions(contextName: keyof AllContexts & string, actionTypes: string[] | boolean = [], extend: boolean = false): void {
+     * - If actionTypes is a boolean, functions in reset mode regardless of the extend setting.
+     * - Otherwise modifies the actionNeeds by adding new entries into it. (Cannot be used to remove many.)
+     *     * If extend is false, resets the actionNeeds to the given set. (This way can remove others.)
+     * - Note that this never modifies the other contexts.
+     */
+    public needsActions(contextName: keyof AllContexts & string, actionTypes: string[] | boolean = [], extend: boolean = true): void {
         // Boolean reset.
         const myNeeds = this.actionNeeds.get(contextName);
         if (typeof actionTypes === "boolean")
             actionTypes ? this.actionNeeds.set(contextName, true) : this.actionNeeds.delete(contextName);
         // Reset.
-        else if (!extend)
+        else if (!extend || !this.actionNeeds.size)
             actionTypes.length ? this.actionNeeds.set(contextName, new Set(actionTypes)) : this.actionNeeds.delete(contextName);
         // Extend - if has something to add.
         else if (actionTypes.length) {
@@ -97,72 +101,73 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         }
     }
 
+    /** Set actions for multiple contexts in one go.
+     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds.
+     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context. */
+    needsActionsBy(namedNeeds: Record<keyof AllContexts & string, boolean | string[]>, extendWithinContext?: boolean, extendForAll: boolean = true) {
+        // If false, then removes action needs from all other contexts.
+        if (!extendForAll) {
+            const needsWere = this.boundary.contextApi.actionNeeds;
+            // Loop each and if not found in the new set, remove.
+            for (const name of needsWere.keys())
+                if (namedNeeds[name] === undefined)
+                    needsWere.delete(name);
+        }
+        // Set for each given.
+        for (const name in namedNeeds)
+            this.boundary.contextApi.needsActions(name, namedNeeds[name], extendWithinContext);
+    }
+
 
     // - Context - //
 
     /** Use this to set the optional data refresh keys - resets the current keys for that context.
      * - There can be one or many keywords, or true to allow anything (default). If false, then removes needs.
-     * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "." */
-    public needsContext(name: string, needs: boolean | string | string[] = true, refreshIfChanged: boolean = true) {
+     * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "."
+     * - Returns boolean to indicate whether did change or not. Useful for custom refreshing purposes. */
+    public needsData(name: string, needs: boolean | string | string[] = true, refreshIfChanged: boolean = true): boolean {
         // Reset nedes for this context.
         const didNeed = !!this.contextNeeds.get(name);
         needs === false ? this.contextNeeds.delete(name) : this.contextNeeds.set(name, typeof needs === "string" ? [ needs ] : needs);
         // No change in basic needs (in terms of on/off).
         if (didNeed !== !needs)
-            return;
+            return false;
         // Update context collection.
         const ctx = this.getContext(name) || null;
         if (ctx)
             needs ? ctx.services.onInterest("data", this.boundary, name) : ctx.services.onDisInterest("data", this.boundary, name);
         // Refresh.
         if (refreshIfChanged)
-            this.updateContext();
+            this.updateRemote();
+        return true;
     }
-    /** This resets the needs by the given record. */
-    public needsContexts(needs: Record<string, boolean | string | string[]>, refreshIfChanged: boolean = true): void {
-        // Prepare.
-        const oldNames = [...this.contextNeeds.keys()];
+    /** This extends the needs by the given record, or if extend is false resets the whole needs.
+     * - Note that if you want to remove all needs, call with `.needsDataBy({}, false)`
+     * - Returns boolean to indicate whether did change or not. Useful for custom refreshing purposes. */
+    public needsDataBy(needs: Record<string, boolean | string | string[]>, extend: boolean = true, refreshIfChanged: boolean = true): boolean {
+        // Remove data needs in other contexts.
+        if (!extend && this.contextNeeds.size) {
+            // Shallow copy - we don't want to mess with external input.
+            needs = { ...needs };
+            // Loop each to mark for removing.
+            for (const name of this.contextNeeds.keys())
+                // If has no defined needs, add to be removed. (Otherwise, whatever the needs are, they are handled below.)
+                if (needs[name] === undefined)
+                    needs[name] = false;
+        }
+        // Update the given ones.
         let didChange = false;
-        // To remove.
-        for (const name of oldNames) {
-            // Still needed - don't remove.
-            if (needs[name])
-                continue;
-            // Not needed anymore.
-            const ctx = this.getContext(name);
-            didChange = true;
-            if (ctx)
-                ctx.services.onDisInterest("data", this.boundary, name);
-        }
-        // To add.
-        const finalNeeds: Map<string, string[] | boolean> = new Map();
-        for (const name in needs) {
-            // Get and set new needs for this name.
-            const newNeeds = needs[name];
-            finalNeeds.set(name, typeof newNeeds === "string" ? [ newNeeds ] : newNeeds);
-            // Was needed already before in the same way - no change.
-            if (oldNames.indexOf(name) !== -1) {
-                const oldNeeds = this.contextNeeds.get(name);
-                if (oldNeeds === newNeeds || _Lib.areEqual(oldNeeds, newNeeds))
-                    continue;
-            }
-            // Needed now.
-            const ctx = this.getContext(name);
-            didChange = true;
-            if (ctx)
-                ctx.services.onInterest("data", this.boundary, name);
-        }
-        // Apply changes.
-        if (didChange) {
-            // Apply.
-            this.contextNeeds = finalNeeds;
-            // Rebuild.
-            if (refreshIfChanged)
-                this.updateContext();
-        }
+        for (const name in needs)
+            if (this.needsData(name, needs[name], false))
+                didChange = true;
+        // Refresh.
+        if (didChange && refreshIfChanged)
+            this.updateRemote();
+        // Return whether did change for external refreshing.
+        return didChange;
     }
 
-    /** If undefined, will remove the overridden state. Returns whether contextual refresh should be made. */
+    /** If undefined, will remove the overridden state. Returns flags for whether contextual refresh should be made. */
     public overrideContext(name: string, context: UIContext | null | undefined, refresh: boolean = true): UIContextRefresh {
         // Detect change.
         const oldContext = this.getContext(name);
@@ -186,10 +191,11 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         const didChange: UIContextRefresh = oldContext !== newContext ? _Apply.helpUpdateContext(this.boundary, name, newContext || null, oldContext || null) : 0;
         // Refresh.
         if (refresh && _Apply.shouldUpdateContextually(didChange))
-            this.updateContext();
+            this.updateRemote();
         return didChange;
     }
 
+    /** Override multiple contexts in one go. Returns flags for whether contextual refresh should be made. */
     public overrideContexts(contexts: Record<string, UIContext | null | undefined>, refresh: boolean = true): UIContextRefresh {
         // Override each - don't refresh.
         let didChange: UIContextRefresh = 0;
@@ -197,23 +203,10 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
             didChange |= this.overrideContext(name, contexts[name], false);
         // Refresh.
         if (refresh && _Apply.shouldUpdateContextually(didChange))
-            this.updateContext();
+            this.updateRemote();
         // Contextual changes.
         return didChange;
     }
-
-    // public hasContext(name: string): boolean {
-    //     // Overridden.
-    //     let tunnels = this.overriddenContexts;
-    //     if (tunnels && tunnels[name])
-    //         return true;
-    //     // Attached by tunneling.
-    //     tunnels = this.boundary._outerDef.attachedContexts;
-    //     if (tunnels && tunnels[name])
-    //         return true;
-    //     // From outer contexts.
-    //     return !!this.boundary.outerContexts[name];
-    // }
 
     /** Returns undefined if not found, otherwise UIContext | null. */
     public getContext(name: string, onlyTypes: UIContextAttach = UIContextAttach.All): UIContext | null | undefined {
@@ -265,18 +258,18 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         return tunnels;
     }
 
-    public updateContext(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
+    public updateRemote(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
         // On mount run, allow to build the context immediately.
         if (!this.boundary.isMounted) {
             if (this.contextNeeds.size)
-                this.rebuildContext();
+                this.rebuildRemote();
         }
         // Add to updates.
         else
-            this.boundary.uiHost.services.addToUpdates(this.boundary, { contextual: true }, forceUpdateTimeout, forceRenderTimeout);
+            this.boundary.uiHost.services.absorbUpdates(this.boundary, { contextual: true }, forceUpdateTimeout, forceRenderTimeout);
     }
 
-    public rebuildContext(): void {
+    public rebuildRemote(): void {
         // Prepare updating.
         const data: Dictionary = {};
         const ctxs: Record<string, UIContext | null> = {};
@@ -296,8 +289,8 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         }
         // Rebuild.
         const live = this.boundary.live;
-        if (live.buildContext)
-            live.context = live.buildContext(data as UIAllContextsDataWithNull<AllContexts>, ctxs as UIAllContextsWithNull<AllContexts>);
+        if (live.buildRemote)
+            live.remote = live.buildRemote(data as UIAllContextsDataWithNull<AllContexts>, ctxs as UIAllContextsWithNull<AllContexts>);
     }
 
 }
