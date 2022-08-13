@@ -32,10 +32,10 @@ import {
 import { _Defs } from "./_Defs";
 import { uiContent } from "../uiDom";
 import { UIRender } from "../classes/UIRender";
-import { UIContentBoundary, UISourceBoundary, UILiveSource } from "../classes/UIBoundary";
+import { UIContentBoundary, UISourceBoundary, UILiveSource, UIMiniSource } from "../classes/UIBoundary";
 import { UIRef } from "../classes/UIRef";
 import { UILive } from "../classes/UILive";
-import { UIWired, UIWiredType } from "../classes/UIWired";
+import { UIWiredType } from "../classes/UIWired";
 import { UIContext } from "../classes/UIContext";
 
 
@@ -1103,7 +1103,10 @@ export const _Apply = {
         return treeNodes;
     },
 
-    // We assign treeNodes and their def relations here.
+    /** This is a specific handler for true content pass.
+     * - It needs this procedure because its defs have already been paired.
+     * - In here we assign treeNodes to them if they are grounded.
+     * - For those that are not used, we mark .sourceBoundary = null and collect to cleanUp (that we return). */
     assignTreeNodesForPass(contentBoundary: UIContentBoundary): [ToApplyPair[], UITreeNode[], UITreeNode[]] {
         // Prepare.
         const appliedDef = contentBoundary._innerDef;
@@ -1311,13 +1314,20 @@ export const _Apply = {
                             _Apply.helpUpdateContext(cBoundary, name, null, ctx);
                     }
                 }
-            }
-            // Remove from wired bookkeeping.
-            if (boundary.mini && boundary.mini instanceof UIWired) {
-                const Wired = boundary.mini.constructor as UIWiredType;
-                if (Wired.wiredWillUnmount)
-                    Wired.wiredWillUnmount(boundary.mini, boundary);
-                Wired.boundaries.delete(boundary);
+                if (sBoundary.mini) {
+                    // Mini.
+                    const mini = sBoundary.mini;
+                    const Wired = mini.constructor as UIWiredType;
+                    if (mini.uiWillUnmount)
+                        mini.uiWillUnmount();
+                    // Wired.
+                    if (Wired.UI_DOM_TYPE === "Wired") {
+                        if (Wired.uiWillUnmount)
+                            Wired.uiWillUnmount(sBoundary as UIMiniSource);
+                        // Remove from wired bookkeeping.
+                        Wired.boundaries.delete(sBoundary);
+                    }
+                }
             }
             // Add root removals for rendering info.
             const domUnmounts: UITreeNode[] = destroyDom ? boundary.getTreeNodesForDomRoots(false) : []; // <-- shouldn't we get nested..? No but we are in a loop.. okay..
@@ -1414,7 +1424,8 @@ export const _Apply = {
         //     }
         // }
         //
-        // <-- The will call didAttachOn when they do mount: for boundaries below, and for dom in UIRender.
+        // <-- The willAttachOn call is removed.
+        // ... Instead just calls didAttachOn when they do mount (for boundaries below, and for dom in UIRender).
         //
         // Set.
         aDef.attachedRefs = toDef.attachedRefs;
@@ -1751,50 +1762,8 @@ export const _Apply = {
 
     },
 
-    callBoundaryChanges(boundaryChanges: UISourceBoundaryChange[]) {
-        // Loop each.
-        for (const info of boundaryChanges) {
-            // Parse.
-            const [ boundary, change, myPreUpdates, myUpdates ] = info;
-            // Call the component about updates - for mount/unmount also handle a bit more.
-            switch(change) {
-                case "updated":
-                    if (boundary.live && boundary.live.uiDidUpdate)
-                        boundary.live.uiDidUpdate(myPreUpdates || {}, myUpdates || {});
-                    break;
-                case "mounted": {
-                    // Component calls.
-                    const live = boundary.live;
-                    if (live) {
-                        // Call uiDidMount.
-                        if (live.uiDidMount)
-                            live.uiDidMount();
-                    }
-                    // Call on all that reffed us.
-                    if (boundary._outerDef.attachedRefs) {
-                        for (const ref of boundary._outerDef.attachedRefs)
-                            if (ref.uiDidMount)
-                                ref.uiDidMount(boundary);
-                    }
-                    break;
-                }
-                case "moved":
-                    if (boundary.live && boundary.live.uiDidMove)
-                        boundary.live.uiDidMove();
-                    break;
-                case "updated-n-moved":
-                    if (boundary.live && boundary.live.uiDidMove)
-                        boundary.live.uiDidMove();
-                    if (boundary.live && boundary.live.uiDidUpdate)
-                        boundary.live.uiDidUpdate(myPreUpdates || {}, myUpdates || {});
-                    break;
-            }
-        }
-    },
-
-
     /** Sorting principles:
-     * 1. We do it by collecting a uiId parent chain (with ">" splitter, and parent first).
+     * 1. We do it by collecting uiId parent chains (with ">" splitter, parent first).
      *    .. Note that any inner siblings will have the same key chain - we inner sort them by index.
      * 2. And then sort the uiId chains according to .startsWith() logic.
      * 3. Finally we reassign the updates - unraveling the nested order of same keys. */

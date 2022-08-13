@@ -205,6 +205,7 @@ export type UIAllContextsWithNull<AllContexts extends UIAllContexts = {}> = { [N
 export type UIAllContextsDataWithNull<AllContexts extends UIAllContexts = {}> = { [Name in keyof AllContexts]: AllContexts[Name]["data"] | null; };
 export type UIAllContextsData<AllContexts extends UIAllContexts = {}> = { [Name in keyof AllContexts]: AllContexts[Name]["data"]; };
 export type UIAllContextsActions<AllContexts extends UIAllContexts = {}> = { [Name in keyof AllContexts]: AllContexts[Name]["Actions"]; };
+export type UIBuildRemoteParams<AllContexts extends UIAllContexts = {}> = [ UIAllContextsDataWithNull<AllContexts>, UIAllContextsWithNull<AllContexts> ];
 
 /** Data listener. The listeners are run after the live component contextual calls are made. */
 export type UIUponData<Context extends UIContext = UIContext> = (data: Context["data"], context: Context) => void;
@@ -251,6 +252,19 @@ export enum UIContextAttach {
     All = Cascading | Parent | Overridden
 }
 
+
+// - Helper - //
+
+/** For quick getting modes to depth for certain uses (UIEffect and DataPicker).
+ * - Positive values can go however deep.
+ * - Note that -1 means deep, but below -2 means will not check. */
+export enum UICompareDepthByMode {
+    always = -2,
+    deep = -1,
+    changed = 0,
+    shallow = 1,
+    double = 2,
+};
 
 // - Props - //
 

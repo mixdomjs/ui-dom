@@ -14,7 +14,7 @@ import {
 // - Export pseudo classes - //
 //
 // These have a constructor just for typescript TSX, as these classes will never be instanced (only their static side used).
-// .. So even though programmer defines: <uiDom.Portal />, the uiDom.portal is not actually ever instanced.
+// .. So even though they are used like: <uiDom.Portal />, the uiDom.Portal class is actually never instanced.
 // .. Instead it's just turned into a target def describing portal (or other) functionality - as the features are handled directly (for better performance).
 
 export type UIFragmentProps = UIGenericProps & {

@@ -12,13 +12,17 @@ import { _Lib } from "./static/_Lib";
 import { _Defs } from "./static/_Defs";
 import { UIFragment, UIPortal, UIElement } from "./classes/UIPseudoClasses";
 import { createSpread } from "./classes/UISpread";
-import { createEffect, UIEffect, UIEffectMixin } from "./classes/UIEffect";
 import { createRef, UIRef, UIRefMixin } from "./classes/UIRef";
 import { createMini, UIMini, UIMiniMixin } from "./classes/UIMini";
 import { createWired } from "./classes/UIWired";
 import { createLive, createLiveBy, UILive, UILiveMixin } from "./classes/UILive";
 import { createHost, UIHost, UIHostMixin } from "./classes/UIHost";
 import { createContext, createContexts, UIContext, UIContextMixin, UIContexts } from "./classes/UIContext";
+
+// Tools.
+import { createEffect, UIEffect, UIEffectMixin } from "./addons/UIEffect";
+import { createDataPicker, createDataSelector } from "./addons/DataPicker";
+
 
 
 // - Export shortcuts - //
@@ -43,12 +47,22 @@ export const uiDom = {
     MiniMixin: UIMiniMixin,
     Ref: UIRef,
     RefMixin: UIRefMixin,
-    Effect: UIEffect,
-    EffectMixin: UIEffectMixin,
     Context: UIContext,
     ContextMixin: UIContextMixin,
     /** ContextAttach flags to use with live.getAllContexts(flags: ContextAttach). */
     ContextAttach: UIContextAttach,
+
+
+    // - Addons - //
+
+    // UIEffect.
+    Effect: UIEffect,
+    EffectMixin: UIEffectMixin,
+    createEffect,
+
+    // DataPicker & DataSelector.
+    createDataPicker,
+    createDataSelector,
 
 
     // - Pseudo classes - //
@@ -103,9 +117,6 @@ export const uiDom = {
 
     /** Create ref. */
     createRef,
-
-    /** Create effect. */
-    createEffect,
 
     /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own keyScope). */
     createSpread,

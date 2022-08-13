@@ -1,9 +1,59 @@
+## v2.1.0
+
+### Features
+
+- In **UIMini**: 
+  - Added all the life cycle calls like in `UILive`. The only difference to `UILive`'s callbacks is the arguments in update related: `uiShouldUpdate`, `uiBeforeUpdate` and `uiDidUpdate` - in `UIMini` the comparable params are just props (vs. `{ props?, state?, remote?, children? }`).
+- In **UIWired**: 
+  - Added all the basic life cycle calls to `UIWired` as static with the boundary as an extra first param.
+  - In addition, they are called always - after the `UIMini` instance called if any. The only exception if the instance has `.uiShouldUpdate` and returns a boolean: in that case, won't call `.uiShouldUpdate` on the wired static part.
+- Implemented **createDataPicker** and **createDataSelector** that resemble `reselect` feature in Redux.
+  - Firstly, it's worth noting that in uiDom the refreshes are "precise" (based on interests in data structure), where as in the Redux environment all the reducers are triggered and then it's checked whether their returned values did change or not, which in turn causes the updates in components who often use the dataSelector feature. Because of this, the data selector is essential in the React-Redux framework, whereas it's an auxiliary tool in uiDom framework.
+    - Actually, similarly to reducers the `buildRemote` method in `UILive` does support the special case of checking if the data is identical with the previous one - if so it omits the contexts part from further update checking. (Of course this whole thing only happens, if the defined interests were triggered - not for all.)
+  - In other words, you don't need to use the concept of reselecting at all in uiDom. It's however provided for three main reasons:
+    1. Sometimes you need to do some heavy process (based on conditions), so you can do it in the selector. (Note that you could also utilize standalone `UIEffect` for this purpose.)
+    2. If used in components with similar remote needs, it makes it a bit easier to refactor your code after changing the data structure in contexts (vs. just adding new data parts). And you can reuse the data selector as the builder function - but of course, you could reuse the builder anyway.
+    3. It can be useful for external usage - eg. related or not related to components.
+  - It's also implemented differently than in React-Redux:
+    - The picker and selector both accept two arguments: (extractor, selector). The 2nd argument is the callback that returns the new data selection using the return values of the extractor. For the picker the 1st argument is an extractor function, while for the selector it's an array of extractor functions.
+    - The reason for difference with Redux is three-fold:
+      1. The extractors anyway receive same arguments - why not just replace it be one extractor and use less func calls. (Debatably, the usage might also be easier to understand for newcomers.)
+      2. To make the typing enormously lighter. (You might have noticed your IDE getting really slow when creating / mangling typed data selectors in React-Redux environment.)
+      3. It's also more straightforward to write the typing support for this (as a dev).
+  - It can be used with manual typing or automated typing mode. To unleash the automated typing you need to redefine the `uiDom.createDataPicker` with a `CreateDataPicker` type. For example: `const myDataPicker = (uiDom.createDataPicker as CreateDataPicker<Params, Data>)( extractor, selector ) `.
+
+### Changes
+
+- In `UIMini`: 
+  - Changed the naming from `.shouldUpdate` to `.uiShouldUpdate` like in live, although has different arguments - but likewise there is `uiDidUdpate` and `uiBeforeUpdate` with similar arguments.
+- In `UIWired`: 
+  - Changed the naming of `.wiredDidMount` callback to an extra `.uiWillMount` - that's what it describes, and removed `.wiredWillUnmount`. 
+- In `UIEffect`:
+  - Made the usage a bit more streamlined by removing `.useWith` from effect and made it always use the `depth` class member, which in turn is always a number. To set it with the `UIUpdateCompareMode` added `setDepth` method to the class.
+  - As dev changes: Moved the static helper dictionary `DEPTH_BY_MODE` into _Types as `UICompareDepthByMode` enumeration. And also changed the typing in methods to use `this["memory"]` instead of `Memory` for more fluent typing with extending mixin usage (after experimentations). 
+
+### Fixes
+
+- Fixed that for class based components the contextApi and contentApi are assigned before instancing the class. To make this possibly, added boundary as the second constructor parameter to `UIMini` and `UILive` - this way, they will have it before the extending constructor is run (but after the init constructor has run, so can attach the features).
+
+### Dev clean up
+
+- Created `addons` folder and moved `UIEffect` there along with the new `DataPicker`. Perhaps these can later be externalized totally - in any case, nothing is dependant on them.
+- Removed old and unnecessary comments from the mixin parts of `UIContext`, `UILive`, `UIRef` and `UIHost`. (The comments and advanced typing should all be in the interface part.)
+- Moved `callBoundaryChanges` static method to `UIHostServices` where it belongs.
+
+### Package
+
+- The dev side (src folder and CONTRIBUTING.md) were accidentally included in the npm packge of v2.0.0. Removed them from the package - don't think there's any need to fatten the npm package with them (it's enough they are shared on GitHub).
+
+---
+
 ## v2.0.0
 
 ### Why new main version?
 
 - Main reason is to reorganize the naming all throughout. (Most importantly for UILive but all around at the same time.)
-  - Before v2.0.0, in the members and methods of UILive, the term "context" is sometimes synonymous for "context data" and sometimes for "context" and sometimes for the "locally built context" - it's unnecessarily confusing. In addition some names are (unnecessarily) long related to using contexts (especially from a live component).
+  - Before v2.0.0, in the members and methods of UILive, the term "context" was sometimes synonymous for "context data" and sometimes for "context" and sometimes for the "locally built context" - it's unnecessarily confusing. In addition some names related to using contexts were quite long (especially via a UILive component).
   - This also made respective calls for actions look a bit strange (they are contextual, too). For example, calling `.needsContexts` might sound as if something you'd need to do before calling `.needsActions` in that context - whereas it means that needs DATA in that contexts. Furthermore, it was confusing that `.needsActions` and `.needsContexts` actually function in different "scale": `.needsActions` is for one context while `.needsContexts` is for many contexts.
   - Also the naming of "dispatch" in `UIContext` is changed to shorted and more friendly "send" and "ask" respectively (see details below).
 
@@ -13,7 +63,7 @@
 ### Naming changes
 
 - **UILive** : The naming in relation to 1. context data, 2. context actions, 3. local data built from many contexts. Respectively the naming is changed in the contextApi as well.  (Basically all naming of all related methods changed.)
-- **UILive**, **UIContext**, **UIContextApi**, **UIContextServces**: "Dispatching" actions and questions has been changed to "send" (instead of "dispatch") for actions and "ask" for questions and questionaries.  This is simply for brevity and a bit easier to understand for non-English speakers.
+- **UILive**, **UIContext**, **UIContextApi**, **UIContextServces**: "Dispatching" actions and questions has been changed to "send" for actions and "ask" for questions and questionaries.  This is simply for brevity and a bit easier to understand for non-English speakers.
 - **UIHost**: Changed `.renderWith` to  `.update` and `clearContents` to `clear`. Added `addListener` and `removeListener` to the interface (where in the mixin base class but not in the type). In settings changed the special value of "contextual" in `preEqualCheckDomProps` to be "if-needed" - because has nothing to do with contexts (and "if-needed" describes better what it does).
 - **UIHostServices**: Reorganized internal member and method naming.
 - **UIContext**: Renamed `addAsPostActions` and `addAsQuickActions` to `flagPostActions` and `flagQuickActions`. Also renamed the `roots` to `inTree`. Also removed `.refresh` and renamed `.refreshBy` to `.refresh`. It's not named to `refreshData` because it also refreshes the actions - it's the common call for both.

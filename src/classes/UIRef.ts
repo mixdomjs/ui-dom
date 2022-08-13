@@ -31,9 +31,6 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
 
         // - Getters - //
 
-        /** This gets the last reffed treeNode.
-         * - It works as if the behaviour was to always override with the last one.
-         * - Except that if the last one is removed, falls back to earlier existing. */
         public getTreeNode(): UITreeNode | null {
             return [...this.treeNodes][this.treeNodes.size - 1] || null;
         }

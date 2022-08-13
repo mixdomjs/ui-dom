@@ -38,26 +38,12 @@ function _UIContextMixin(Base: ClassType) {
 
         // - Basic members - //
 
-        // Data.
         public data: any;
-
-        // Settings.
         public settings: {
-            /** Set of action types that should always be sent after the update-n-render cycle.
-             * If overlaps with quickActions, will be interpreted as a post action.*/
             postActions: null | Set<string>;
-            /** Set of action types that should always be run immediately.
-             * - Set true to force all as quick - this changes the general behaviour.
-             * - Note that if overlaps with postActions, will be treated as a post action. */
             quickActions: true | null | Set<string>;
-            /** Timeout for refreshing for this particular context.
-             * - The timeout is used for both: actions & data refreshes.
-             * - If null, then synchronous - defaults to 0ms. */
             refreshTimeout: number | null;
         };
-
-        /** Internal services to keep the whole thing together and synchronized.
-         * They are the semi-private internal part of UIContext, so separated into its own class. */
         public services: UIContextServices;
 
 
@@ -65,22 +51,11 @@ function _UIContextMixin(Base: ClassType) {
         //
         // .. These are kept here (instead of .services), for custom mangling (in case extends UIContext or UIContextMixin).
 
-        /** Contains the TreeNodes where this context is inserted as keys and values is a Set of names is inserted as.
-         * - This is not used for refresh flow (anymore), but could be very useful for custom purposes. */
         public inTree: Map<UITreeNodeContexts, Set<string>>;
-        /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
         public dataBoundaries: Map<UILiveSource, Set<string>>;
-        /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
         public actionBoundaries: Map<UILiveSource, Set<string>>;
-        /** Any external data listeners - called after the live components. */
         public dataListeners: Map<UIUponData<UIContext>, Set<string> | true>;
-        /** Any external action listeners - called after the live components. */
         public actionListeners: Map<UIUponAction<UIContext> | UIUponQuestion<UIContext>, Set<string> | true>;
-        /** Any external action pre-listeners: called immediately when action sent.
-         * - Return true to make the action be triggered after update and render (within each uiHost).
-         * - Return false to cancel sending the action (after pre-listeners).
-         * - Otherwise will send the action normally upon refreshing the context.
-         * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
         public actionHandlers: Map<UIUponPreAction<UIContext>, Set<string> | true>;
 
 

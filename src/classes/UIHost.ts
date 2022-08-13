@@ -29,27 +29,17 @@ function _UIHostMixin(Base: ClassType) {
 
     return class _UIHost extends Base {
 
+        // Static.
         public static UI_DOM_TYPE = "Host";
 
-        /** This represents abstractly what the final outcome looks like in dom.
-         * .. Each UITreeNode represents a domNode in the final dom.
-         * .. So if you gNode.domNode.parentNode === gNode.parent?.domNode.
-         */
+        // Public.
         public groundedTree: UITreeNode;
         public rootBoundary: UISourceBoundary;
-        /** The general settings for this uiHost instance.
-         * - Do not modify directly, use the .modifySettings method instead.
-         * - Otherwise rendering might have old settings, or setting.onlyRunInContainer might be uncaptured. */
         public settings: UIHostSettings;
 
-        /** Internal services to keep the whole thing together and synchronized.
-         * They are the semi-private internal part of UIHost, so separated into its own class. */
+        // Semi private.
         services: UIHostServices;
-
-        // State.
-        /** This is the target render definition that defines our render output. */
         targetDef: UIDefTarget | null;
-        /** Temporary value. */
         _isDisabled?: true;
 
 
@@ -331,14 +321,19 @@ export interface UIHost {
     groundedTree: UITreeNode;
     rootBoundary: UISourceBoundary;
     /** Internal services to keep the whole thing together and synchronized.
-     * They are the private internal part of uiHost, so separated into its own class. */
+     * They are the semi-private internal part of UIHost, so separated into its own class. */
     services: UIHostServices;
+    /** The general settings for this uiHost instance.
+     * - Do not modify directly, use the .modifySettings method instead.
+     * - Otherwise rendering might have old settings, or setting.onlyRunInContainer might be uncaptured. */
     settings: UIHostSettings;
 
     // State.
+    /** This is the target render definition that defines our render output. */
     targetDef: UIDefTarget | null;
 
-    // Temporary internal value (for .onlyRunInContainer setting).
+    // Temporary.
+    /** Temporary value (for .onlyRunInContainer setting). */
     _isDisabled?: true;
 
     // Basic methods.

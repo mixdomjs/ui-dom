@@ -62,8 +62,8 @@ export const _Defs = {
         }
     },
 
-	// Note. The created DEF has the props.children removed and cleaned into its own property here.
-	// .. When the props are applied to a component the children will be added back into props.
+    // Note. The created DEF has the props.children removed and cleaned into its own property here.
+    // .. When the props are applied to a component the children will be added back into props.
     // .. Returns null only if has no tagOrClass and no contentPass defined.
     createDef<Props extends Dictionary = {}>(tagOrClass: UIPreTag = "div", origProps: UIGenericProps<Props> | null = null, ...contents: UIRenderOutput[]): UIDefTarget | null {
 
@@ -169,7 +169,7 @@ export const _Defs = {
 	},
 
     // Create a def out of the content.
-	createDefFromContent(renderContent: UIRenderOutput): UIDefTarget | null {
+    createDefFromContent(renderContent: UIRenderOutput): UIDefTarget | null {
 
         // Object type.
         if (renderContent && (typeof renderContent === "object")) {
@@ -225,7 +225,7 @@ export const _Defs = {
         	};
         // Is empty.
         return null;
-	},
+    },
 
     /** Copies everything from targetDef that defines its type, but not any "updatable" properties (except key). */
     newAppliedDefBy(targetDef: UIDefTarget, contentClosure: UIContentClosure | null): UIDefApplied {

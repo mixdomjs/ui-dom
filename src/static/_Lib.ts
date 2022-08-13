@@ -177,7 +177,7 @@ export const _Lib = {
 
     /** Get diffs in class names in the form of: Record<string, boolean>, where true means added, false removed, otherwise not included.
      * - Note. This process only checks for changes - it ignores changes in order completely. */
-	getClassNameDiffs(origName?: string, newName?: string): Record<string, boolean> | null {
+    getClassNameDiffs(origName?: string, newName?: string): Record<string, boolean> | null {
         // Quick check.
         origName = origName || "";
         newName = newName || "";
@@ -202,32 +202,32 @@ export const _Lib = {
     		}
         // Return diffs if has any.
         return did !== null ? diffs : null;
-	},
+    },
 
 	getDictionaryDiffs<T extends Dictionary>(orig: Partial<T>, update: Partial<T>, skipProps?: Array<keyof T>): Partial<T> | null {
-		// Collect.
-		const diffs: Partial<T> = {};
-		// .. Deleted.
-		for (const prop in orig) {
-			const origValue = orig[prop];
-			if (origValue !== undefined && update[prop] === undefined)
-				diffs[prop] = undefined;
-		}
-		// .. Added or changed.
-		for (const prop in update) {
-			const newValue = update[prop];
-			if (orig[prop] !== newValue)
-				diffs[prop] = newValue;
-		}
-		// Skip props.
-		if (skipProps)
-			for (const prop of skipProps)
-				delete diffs[prop];
-		// Return diffs if has - or null otherwise.
-		for (const _prop in diffs)
-			return diffs;
-		return null;
-	},
+        // Collect.
+        const diffs: Partial<T> = {};
+        // .. Deleted.
+        for (const prop in orig) {
+            const origValue = orig[prop];
+            if (origValue !== undefined && update[prop] === undefined)
+                diffs[prop] = undefined;
+	    }
+        // .. Added or changed.
+        for (const prop in update) {
+            const newValue = update[prop];
+            if (orig[prop] !== newValue)
+                diffs[prop] = newValue;
+        }
+        // Skip props.
+        if (skipProps)
+            for (const prop of skipProps)
+                delete diffs[prop];
+        // Return diffs if has - or null otherwise.
+        for (const _prop in diffs)
+            return diffs;
+        return null;
+    },
 
     /** Inlined comparison method specialized into domProps (attributes of a dom element). */
     equalDomProps(a: UIHTMLPostProps, b: UIHTMLPostProps): boolean {
@@ -276,7 +276,7 @@ export const _Lib = {
      * - nDepth: 1. Shallow equal.
      * - nDepth: 2. Shallow double equal.
      * - nDepth < 0. Deep. */
-	areEqual(a: any, b: any, nDepth = -1): boolean {
+    areEqual(a: any, b: any, nDepth = -1): boolean {
         // Identical.
         if (a === b)
             return true;
@@ -353,6 +353,6 @@ export const _Lib = {
         }
         // Otherwise not equal, because are not objects and were not identical (checked earlier already).
         return false;
-	},
+    },
 
 }

@@ -12,6 +12,7 @@ import {
     UIUpdateCompareMode,
 } from "../static/_Types";
 import { uiDom } from "../uiDom";
+import { UIMiniSource } from "./UIBoundary";
 
 function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
@@ -28,16 +29,22 @@ function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
         // - Methods - //
 
-        constructor(props: Props, updateMode: UIUpdateCompareMode | null = null, ...passArgs: any[]) {
+        constructor(props: Props, boundary?: UIMiniSource, updateMode: UIUpdateCompareMode | null = null, ...passArgs: any[]) {
+            // We are a mixin.
             super(...passArgs);
+            // Set from args.
             this.props = props;
             this.updateMode = updateMode;
+            // Assign encapsulated by boundary.
+            if (boundary) {
+                this.isMounted = (): boolean => boundary.isMounted === true;
+                this.getChildren = boundary.contentApi.getChildren.bind(boundary.contentApi);
+                this.needsChildren = boundary.contentApi.needsChildren.bind(boundary.contentApi);
+            }
         }
         public setUpdateMode(updateMode: UIUpdateCompareMode | null): void {
             this.updateMode = updateMode;
         }
-        public shouldUpdate?(prevProps: Props | null, newProps: Props | null): boolean | null;
-        // public beforeUpdate?(prevProps: Props | null, newProps: Props | null, willUpdate: boolean): void;
 
         // - Methods that are set by the boundary - //
 
@@ -59,7 +66,7 @@ export interface UIMini<Props extends Dictionary = {}> {
      * - See UIUpdateCompareMode for details.
      * - Note that for UIMini, you can't define the needs for children.
      *   .. The setting is always in the default host based mode for children, by default it's "changed".
-     *   .. Accordingly children are not part of the .shouldUpdate(prevProps, nextProps). */
+     *   .. Accordingly children are not part of the .uiShouldUpdate(prevProps, nextProps). */
     updateMode: UIUpdateCompareMode | null;
 
     // - Methods - //
@@ -79,10 +86,23 @@ export interface UIMini<Props extends Dictionary = {}> {
 
     // - Callbacks - //
 
-    /** If returns true, component will update. If false, will not.
-     * If returns null (or no shouldUpdate method assigned), will use the rendering settings to determine.
-     * Note that this is named different from uiShouldUpdate because the arguments are just props, not { props?, state?, context?, children? }.*/
-    shouldUpdate?(prevProps: Props | null, newProps: Props | null): boolean | null;
+    // Component life cycle.
+    /** This is a callback that will always be called when the component is checked for updates.
+     * - Note that this is not called on mount, but will be called everytime on update, even if will not actually update (use the 3rd param).
+     * - Note that this will be called after uiShouldUpdate (if that is called) and right before the update happens.
+     * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
+    uiBeforeUpdate?(prevProps: Props | null, newProps: Props | null, willUpdate: boolean): void;
+    /** Callback to determine whether should update or not.
+     * - If returns true, component will update. If false, will not.
+     * - If returns null (or no uiShouldUpdate method assigned), will use the rendering settings to determine.
+     * - Note that this is not called every time necessarily (never on mount, and not if was forced).
+     * - Note that this is called right before uiBeforeUpdate and the actual update (if that happens).
+     * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
+    uiShouldUpdate?(prevProps: Props | null, newProps: Props | null): boolean | null;
+    uiDidMount?(): void;
+    uiDidMove?(): void;
+    uiDidUpdate?(prevProps: Props | null, newProps: Props | null): void;
+    uiWillUnmount?(): void;
 
     // /** This is a callback that will always be called when the component is checked for updates.
     //  * - Note that this is not called on mount, but will be called everytime on update, even if will not actually update (use the 3rd param).

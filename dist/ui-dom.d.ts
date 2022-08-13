@@ -1,9 +1,8 @@
 declare const UIMini_base: {
-    new (props: {}, updateMode?: UIUpdateCompareMode | null, ...passArgs: any[]): {
+    new (props: {}, boundary?: UIMiniSource<{}> | undefined, updateMode?: UIUpdateCompareMode | null, ...passArgs: any[]): {
         readonly props: {};
         updateMode: UIUpdateCompareMode | null;
         setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
-        shouldUpdate?(prevProps: {} | null, newProps: {} | null): boolean | null;
         render(_props: {}): UIMiniFunction<{}> | UIRenderOutput;
         isMounted(): boolean;
         getChildren(_skipNeeds?: boolean, _shallowCopy?: boolean): readonly UIDefTarget[];
@@ -25,7 +24,7 @@ interface UIMini<Props extends Dictionary = {}> {
      * - See UIUpdateCompareMode for details.
      * - Note that for UIMini, you can't define the needs for children.
      *   .. The setting is always in the default host based mode for children, by default it's "changed".
-     *   .. Accordingly children are not part of the .shouldUpdate(prevProps, nextProps). */
+     *   .. Accordingly children are not part of the .uiShouldUpdate(prevProps, nextProps). */
     updateMode: UIUpdateCompareMode | null;
     /** Get the actual contentPass childDefs. If used will mark needsChildren temporarily (until next render).
      *   .. When used, reads the children from the content pass.
@@ -38,10 +37,22 @@ interface UIMini<Props extends Dictionary = {}> {
      * - If boolean given it forces the mode.
      * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
     needsChildren(needs?: boolean | "temp" | null): void;
-    /** If returns true, component will update. If false, will not.
-     * If returns null (or no shouldUpdate method assigned), will use the rendering settings to determine.
-     * Note that this is named different from uiShouldUpdate because the arguments are just props, not { props?, state?, context?, children? }.*/
-    shouldUpdate?(prevProps: Props | null, newProps: Props | null): boolean | null;
+    /** This is a callback that will always be called when the component is checked for updates.
+     * - Note that this is not called on mount, but will be called everytime on update, even if will not actually update (use the 3rd param).
+     * - Note that this will be called after uiShouldUpdate (if that is called) and right before the update happens.
+     * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
+    uiBeforeUpdate?(prevProps: Props | null, newProps: Props | null, willUpdate: boolean): void;
+    /** Callback to determine whether should update or not.
+     * - If returns true, component will update. If false, will not.
+     * - If returns null (or no uiShouldUpdate method assigned), will use the rendering settings to determine.
+     * - Note that this is not called every time necessarily (never on mount, and not if was forced).
+     * - Note that this is called right before uiBeforeUpdate and the actual update (if that happens).
+     * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
+    uiShouldUpdate?(prevProps: Props | null, newProps: Props | null): boolean | null;
+    uiDidMount?(): void;
+    uiDidMove?(): void;
+    uiDidUpdate?(prevProps: Props | null, newProps: Props | null): void;
+    uiWillUnmount?(): void;
     /** Whether the component has mounted or not. */
     isMounted(): boolean;
     /** Set the update mode for this particular renderer instance.
@@ -100,26 +111,16 @@ declare class UIHostServices {
     absorbChanges(renderInfos: UIDomRenderInfo[] | null, boundaryChanges?: UISourceBoundaryChange[] | null, forcePostTimeout?: number | null): void;
     private flushRender;
     private refreshWithTimeout;
+    private static callBoundaryChanges;
 }
 
 declare const UIHost_base: {
     new (content?: UIRenderOutput, domContainer?: Node | null | undefined, settings?: UIHostSettingsUpdate | null | undefined): {
-        /** This represents abstractly what the final outcome looks like in dom.
-         * .. Each UITreeNode represents a domNode in the final dom.
-         * .. So if you gNode.domNode.parentNode === gNode.parent?.domNode.
-         */
         groundedTree: UITreeNode;
         rootBoundary: UISourceBoundary;
-        /** The general settings for this uiHost instance.
-         * - Do not modify directly, use the .modifySettings method instead.
-         * - Otherwise rendering might have old settings, or setting.onlyRunInContainer might be uncaptured. */
         settings: UIHostSettings;
-        /** Internal services to keep the whole thing together and synchronized.
-         * They are the semi-private internal part of UIHost, so separated into its own class. */
         services: UIHostServices;
-        /** This is the target render definition that defines our render output. */
         targetDef: UIDefTarget | null;
-        /** Temporary value. */
         _isDisabled?: true | undefined;
         addListener(type: "update" | "render", callback: () => void): void;
         removeListener(type: "update" | "render", callback: () => void): void;
@@ -158,10 +159,15 @@ interface UIHost {
     groundedTree: UITreeNode;
     rootBoundary: UISourceBoundary;
     /** Internal services to keep the whole thing together and synchronized.
-     * They are the private internal part of uiHost, so separated into its own class. */
+     * They are the semi-private internal part of UIHost, so separated into its own class. */
     services: UIHostServices;
+    /** The general settings for this uiHost instance.
+     * - Do not modify directly, use the .modifySettings method instead.
+     * - Otherwise rendering might have old settings, or setting.onlyRunInContainer might be uncaptured. */
     settings: UIHostSettings;
+    /** This is the target render definition that defines our render output. */
     targetDef: UIDefTarget | null;
+    /** Temporary value (for .onlyRunInContainer setting). */
     _isDisabled?: true;
     addListener(type: "update" | "render", callback: () => void): void;
     removeListener(type: "update" | "render", callback: () => void): void;
@@ -238,39 +244,18 @@ declare const UIContext_base: {
     new (data: any, settings: UIContextSettingsUpdate<string> | null | undefined, ...passArgs: any[]): {
         data: any;
         settings: {
-            /** Set of action types that should always be sent after the update-n-render cycle.
-             * If overlaps with quickActions, will be interpreted as a post action.*/
             postActions: Set<string> | null;
-            /** Set of action types that should always be run immediately.
-             * - Set true to force all as quick - this changes the general behaviour.
-             * - Note that if overlaps with postActions, will be treated as a post action. */
             quickActions: true | Set<string> | null;
-            /** Timeout for refreshing for this particular context.
-             * - The timeout is used for both: actions & data refreshes.
-             * - If null, then synchronous - defaults to 0ms. */
             refreshTimeout: number | null;
         };
-        /** Internal services to keep the whole thing together and synchronized.
-         * They are the semi-private internal part of UIContext, so separated into its own class. */
         services: UIContextServices;
-        /** Contains the TreeNodes where this context is inserted as keys and values is a Set of names is inserted as.
-         * - This is not used for refresh flow (anymore), but could be very useful for custom purposes. */
         inTree: Map<UITreeNodeContexts, Set<string>>;
-        /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-        dataBoundaries: Map<UILiveSource<{}, {}>, Set<string>>;
-        /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-        actionBoundaries: Map<UILiveSource<{}, {}>, Set<string>>;
-        /** Any external data listeners - called after the live components. */
+        dataBoundaries: Map<UILiveSource<{}, {}, {}, {}>, Set<string>>;
+        actionBoundaries: Map<UILiveSource<{}, {}, {}, {}>, Set<string>>;
         dataListeners: Map<UIUponData<UIContext<any, {}>>, true | Set<string>>;
-        /** Any external action listeners - called after the live components. */
         actionListeners: Map<UIUponAction<UIContext<any, {}>> | UIUponQuestion<UIContext<any, {}>, UIAction & {
             value: any;
         }>, true | Set<string>>;
-        /** Any external action pre-listeners: called immediately when action sent.
-         * - Return true to make the action be triggered after update and render (within each uiHost).
-         * - Return false to cancel sending the action (after pre-listeners).
-         * - Otherwise will send the action normally upon refreshing the context.
-         * - Note that this is also called for questions (for logging purposes), in which case the return value makes no difference. */
         actionHandlers: Map<UIUponPreAction<UIContext<any, {}>>, true | Set<string>>;
         modifySettings(settings: UIContextSettingsUpdate<string>): void;
         flagPostActions(actionTypes: string | string[] | Set<string> | null, extend?: boolean): void;
@@ -467,13 +452,12 @@ declare type UIContextsType<AllContexts extends UIAllContexts = {}> = ClassType<
 declare const createContexts: <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts]: Contexts[Name_2]["data"]; }>(contextsData: AllData) => Contexts;
 
 declare const UILive_base: {
-    new (props: {}, ...args: any[]): {
+    new (props: {}, boundary?: UILiveSource<{}, {}, {}, {}> | undefined, ...args: any[]): {
         readonly props: {};
         state: {};
         remote: {};
         readonly wired: Set<UIWiredType<{}, {}, {}, any[], (lastProps: {} | null, ...params: any[]) => {}, (baseProps: {}, addsProps: {}, ...params: any[]) => {}>> | null;
-        /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
-        readonly boundary: UILiveSource<{}, {}>;
+        readonly boundary: UILiveSource<{}, {}, {}, {}>;
         updateModes: Partial<UIUpdateCompareModesBy>;
         _timers?: Map<any, number> | undefined;
         update(forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
@@ -727,7 +711,7 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     uiWillUnmount?(): void;
 }
 declare class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends UILive_base {
-    constructor(props: Props, ...args: any[]);
+    constructor(props: Props, boundary?: UILiveSource<AllContexts, Remote>, ...args: any[]);
 }
 /** Create a UILive functional component. */
 declare const createLive: <Props extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) => UILiveFunction<Props, State, Remote, AllContexts>;
@@ -929,17 +913,19 @@ declare class UISourceBoundary extends UIBaseBoundary {
     updateBy(updates: UILiveNewUpdates, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     render(iRecursion?: number): UIRenderOutput;
 }
-interface UILiveSource<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}> extends UISourceBoundary {
+interface UILiveSource<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}> extends UISourceBoundary {
+    contentApi: UIContentApi;
     contextApi: UIContextApi<AllContexts, Remote>;
-    live: UILive<{}, {}, Remote, AllContexts, {}>;
+    live: UILive<Props, State, Remote, AllContexts, {}>;
+}
+interface UIMiniSource<Props extends Dictionary = {}> extends UISourceBoundary {
+    contentApi: UIContentApi;
+    mini: UIMini<Props>;
 }
 
 declare const UIRef_base: {
     new (...args: any[]): {
         treeNodes: Set<UITreeNode>;
-        /** This gets the last reffed treeNode.
-         * - It works as if the behaviour was to always override with the last one.
-         * - Except that if the last one is removed, falls back to earlier existing. */
         getTreeNode(): UITreeNode | null;
         getTreeNodes(): UITreeNode[];
         getDomNode(onlyForDomRefs?: boolean): ((Node | UISourceBoundary) & Node) | null;
@@ -948,6 +934,9 @@ declare const UIRef_base: {
         getRefBoundaries(): ((Node | UISourceBoundary) & UISourceBoundary)[];
         constructor: Function;
         toString(): string;
+        /** This gets the last reffed treeNode.
+         * - It works as if the behaviour was to always override with the last one.
+         * - Except that if the last one is removed, falls back to earlier existing. */
         toLocaleString(): string;
         valueOf(): Object;
         hasOwnProperty(v: PropertyKey): boolean;
@@ -988,6 +977,7 @@ interface UIRef<Type extends Node | UISourceBoundary = Node | UISourceBoundary> 
 }
 declare class UIRef<Type extends Node | UISourceBoundary = Node | UISourceBoundary> extends UIRef_base {
 }
+declare const createRef: <Type extends Node | UISourceBoundary = Node | UISourceBoundary>() => UIRef<Type>;
 /** There are two ways you can use this:
  * 1. Call this to give basic UIRef features.
  *      * For example: `class MyMix extends UIRefMixin(MyBase) {}`
@@ -1222,6 +1212,7 @@ declare type UIAllContextsData<AllContexts extends UIAllContexts = {}> = {
 declare type UIAllContextsActions<AllContexts extends UIAllContexts = {}> = {
     [Name in keyof AllContexts]: AllContexts[Name]["Actions"];
 };
+declare type UIBuildRemoteParams<AllContexts extends UIAllContexts = {}> = [UIAllContextsDataWithNull<AllContexts>, UIAllContextsWithNull<AllContexts>];
 /** Data listener. The listeners are run after the live component contextual calls are made. */
 declare type UIUponData<Context extends UIContext = UIContext> = (data: Context["data"], context: Context) => void;
 /** Action listener. The listeners are run after the live component contextual calls are made. */
@@ -1258,6 +1249,16 @@ declare enum UIContextAttach {
     Overridden = 4,
     /** Shortcut for all types. */
     All = 7
+}
+/** For quick getting modes to depth for certain uses (UIEffect and DataPicker).
+ * - Positive values can go however deep.
+ * - Note that -1 means deep, but below -2 means will not check. */
+declare enum UICompareDepthByMode {
+    always = -2,
+    deep = -1,
+    changed = 0,
+    shallow = 1,
+    double = 2
 }
 declare type UIProps<T = {}> = {
     key?: any;
@@ -1736,15 +1737,22 @@ declare class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProp
     static getAddedProps(): Record<string, any>;
     static getMixedProps(_props: Dictionary): Record<string, any>;
     static updateMode: UIUpdateCompareMode | null;
-    static shouldUpdate?(preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
-    static wiredDidMount?(wired: UIWired, boundary: UISourceBoundary): void;
+    static uiWillMount?(boundary: UIMiniSource): void;
+    static uiDidMount?(boundary: UIMiniSource): void;
+    static uiShouldUpdate?(boundary: UIMiniSource, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
+    static uiBeforeUpdate?(boundary: UIMiniSource, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
+    static uiDidUpdate?(boundary: UIMiniSource, prevProps: Dictionary | null, newProps: Dictionary | null): void;
+    static uiDidMove?(boundary: UIMiniSource): void;
+    static uiWillUnmount?(boundary: UIMiniSource): void;
+    static wiredWillMount?(wired: UIWired, boundary: UISourceBoundary): void;
     static wiredWillUnmount?(wired: UIWired, boundary: UISourceBoundary): void;
-    constructor(props: BaseProps, updateMode?: UIUpdateCompareMode | null);
+    constructor(props: BaseProps, boundary?: UIMiniSource, updateMode?: UIUpdateCompareMode | null);
     render(): UIRenderOutput;
 }
-/** The static class type for UIWired that is extended when creates a wired source. */
+/** The static class type for UIWired that is extended when creates a wired source.
+ * Note that you can use the UIMini callbacks, they are called after calling them on the instance (if even were there). */
 declare type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps> = {
-    new (_props?: BaseProps | null): UIWired<BaseProps>;
+    new (_props?: BaseProps | null, _boundary?: UISourceBoundary): UIWired<BaseProps>;
     readonly UI_DOM_TYPE: "Wired";
     /** The currently instanced boundaries that have a QWire class instance as their boundary.mini. */
     boundaries: Set<UISourceBoundary>;
@@ -1766,46 +1774,61 @@ declare type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps
     /** Call this to manually update the wired part of props and force a refresh.
      * - This is most often called by the static refresh method above, with props coming from Wired.builder. */
     setProps(props: WiredProps, update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
-    shouldUpdate?(preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
-    wiredDidMount?(wired: UIWired<BaseProps>, boundary: UISourceBoundary): void;
-    wiredWillUnmount?(wired: UIWired<BaseProps>, boundary: UISourceBoundary): void;
+    /** Special call for wired only - called right after constructing the wired instance. You can access the mini instance by boundary.mini. */
+    uiWillMount?(boundary: UIMiniSource<BaseProps>): void;
+    uiDidMount?(boundary: UIMiniSource<BaseProps>): void;
+    /** On wired, the static .uiShouldUpdate is not called if the instance had .uiShouldUpdate and it returned a boolean.
+     * - Otherwise, this is called and can affect the outcome normally. */
+    uiShouldUpdate?(boundary: UIMiniSource<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
+    uiBeforeUpdate?(boundary: UIMiniSource<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
+    uiDidUpdate?(boundary: UIMiniSource<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
+    uiDidMove?(boundary: UIMiniSource<BaseProps>): void;
+    uiWillUnmount?(boundary: UIMiniSource<BaseProps>): void;
 };
 declare const createWired: <BaseProps extends Dictionary<string, any> = {}, WiredProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps>(funcOrClass: UIComponent<MixedProps>, builderOrProps?: WiredProps | Builder | null | undefined, mixer?: Mixer | undefined, ...params: Params) => UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
 
+declare type DataExtractor<P extends any[] = any[], R = any> = (...args: P) => R;
+/** This helps to create a fully typed data picker with one extractor that outputs an array.
+ * - It returns a callback that can be used for selecting (like in Redux). */
+declare type CreateDataPicker<Params extends any[] = any[], Data = any> = <Extractor extends DataExtractor<Params>, Extracted extends ReturnType<Extractor> = ReturnType<Extractor>>(extractor: Extractor, selector: (...args: Extracted) => Data, depth?: number | UIUpdateCompareMode) => (...args: Params) => Data;
+/** This helps to create a fully typed data selector with multiple extractors (each outputting any value) as an array.
+ * - It returns a callback that can be used for selecting (like in Redux).
+ * - The typing supports up to 20 extractors. */
+declare type CreateDataSelector<Params extends any[] = any[], Data = any> = <S1 extends DataExtractor<Params>, S2 extends DataExtractor<Params>, S3 extends DataExtractor<Params>, S4 extends DataExtractor<Params>, S5 extends DataExtractor<Params>, S6 extends DataExtractor<Params>, S7 extends DataExtractor<Params>, S8 extends DataExtractor<Params>, S9 extends DataExtractor<Params>, S10 extends DataExtractor<Params>, S11 extends DataExtractor<Params>, S12 extends DataExtractor<Params>, S13 extends DataExtractor<Params>, S14 extends DataExtractor<Params>, S15 extends DataExtractor<Params>, S16 extends DataExtractor<Params>, S17 extends DataExtractor<Params>, S18 extends DataExtractor<Params>, S19 extends DataExtractor<Params>, S20 extends DataExtractor<Params>, SelectorArgs extends [ReturnType<S1>, ReturnType<S2>, ReturnType<S3>, ReturnType<S4>, ReturnType<S5>, ReturnType<S6>, ReturnType<S7>, ReturnType<S8>, ReturnType<S9>, ReturnType<S10>, ReturnType<S11>, ReturnType<S12>, ReturnType<S13>, ReturnType<S14>, ReturnType<S15>, ReturnType<S16>, ReturnType<S17>, ReturnType<S18>, ReturnType<S19>, ReturnType<S20>]>(extractors: [S1?, S2?, S3?, S4?, S5?, S6?, S7?, S8?, S9?, S10?, S11?, S12?, S13?, S14?, S15?, S16?, S17?, S18?, S19?, S20?], selector: (...args: SelectorArgs) => Data, depth?: number | UIUpdateCompareMode) => (...args: SelectorArgs) => Data;
+/** Create a data picker: It's like UIEffect but for data with an intermediary extractor.
+ * - Give an extractor that extracts an array out of your customly defined arguments.
+ * - Whenever the extracted output has changed (in shallow sense by default), the selector will be run.
+ * - The arguments of the selector is the extracted array spread out, and it should return the output data solely based on them.
+ * - The whole point of this abstraction, is to trigger the presumably expensive selector call only when the cheap extractor func tells there's a change. */
+declare const createDataPicker: CreateDataPicker;
+/** Create a data selector: It's like the DataPicker above, but takes in an array of extractors (not just one).
+ * - Accordingly the outputs of extractors are then spread out as the arguments for the selector. */
+declare const createDataSelector: CreateDataSelector;
+
 /** Effect to run when memory has changed (according to the comparison mode).
  * - If returns a new effect function, it will be run when unmounting the effect. */
-declare type UIEffectOnMount = () => void | UIEffectOnUnmount;
-declare type UIEffectOnUnmount = () => void;
+declare type UIEffectOnMount = (...args: any[]) => void | UIEffectOnUnmount;
+declare type UIEffectOnUnmount = (...args: any[]) => void;
 declare const UIEffect_base: {
     new (effect?: UIEffectOnMount | undefined, memory?: any, ...baseParams: any[]): {
         memory: any;
         onMount: UIEffectOnMount | null;
         onUnmount: UIEffectOnUnmount | null;
-        depth: number | UIUpdateCompareMode;
+        depth: number;
+        setDepth(depth?: number | UIUpdateCompareMode | null | undefined): void;
         reset(effect: UIEffectOnMount | null, memory: any, forceRun?: boolean): boolean;
         use(memory: any, forceRun?: boolean, newEffectIfChanged?: UIEffectOnMount | null | undefined): boolean;
-        useWith(depth: number | UIUpdateCompareMode, memory: any, newEffectIfChanged?: UIEffectOnMount | null | undefined): boolean;
         /** Cancel effect. */
         cancel(skipUnmount?: boolean, clearEffect?: boolean): void;
         constructor: Function;
         toString(): string;
         toLocaleString(): string;
         valueOf(): Object;
-        hasOwnProperty(v: PropertyKey): boolean;
+        hasOwnProperty(v: PropertyKey): boolean; /** Set the comparison depth using a number or the shortcut names in UIUpdateCompareMode. */
         isPrototypeOf(v: Object): boolean;
         propertyIsEnumerable(v: PropertyKey): boolean;
     };
     UI_DOM_TYPE: string;
-    /** For quick getting modes to depth.
-     * - Positive values can go however deep.
-     * - Note that -1 means deep, but below -2 means will not check. */
-    DEPTH_BY_MODE: {
-        always: number;
-        deep: number;
-        changed: number;
-        shallow: number;
-        double: number;
-    };
 };
 interface UIEffect<Memory = any> {
     /** The last store memory. */
@@ -1815,28 +1838,26 @@ interface UIEffect<Memory = any> {
     onMount: UIEffectOnMount | null;
     /** This is automatically assigned by the return value of the onMount - if doesn't return a func, will assing to null. */
     onUnmount: UIEffectOnUnmount | null;
-    /** Comparison mode to be used by default. (Defaults to 1, which is the same as "shallow".) */
-    depth: number | UIUpdateCompareMode;
+    /** Comparison mode to be used by default. (Defaults to 1, which is the same as "shallow".)
+    * - If -1 depth, performs fully deep search. If depth <= -2, then is in "always" mode (doesn't even check). */
+    depth: number;
     /** Alias for .use, that requires a function. (Do not use this, if you can reuse a function.)
      * - Note that if you can reuse a function all the time, you should. (There's no point declaring a new one every time in vain.)
      * - Note that you can also call .update(mem), and if it returns true, then do your effect inline.  */
-    reset(effect: (() => void) | null, memory: Memory, forceRun?: boolean): boolean;
+    reset(effect: (() => void) | null, memory: this["memory"], forceRun?: boolean): boolean;
     /** Alias for .useWith with default depth.
      * - Stores the memory and performs a shallow check against previous and returns true if changed.
      * - If newEffectIfChanged is not undefined, overrides the effect (only if was changed) right before calling the effect.
      * - Note that you don't need to have an effect assigned at all: you can also use the returned boolean and run your "effect" inline. */
-    use(memory: Memory, forceRun?: boolean, newEffectIfChanged?: (() => void) | null): boolean;
-    /** The main method.
-     * - Stores the memory and performs a shallow check against previous and returns true if changed.
-     * - If -1 depth, performs fully deep search. If depth <= -2, then is in "always" mode (doesn't even check).
-     * - If newEffectIfChanged is not undefined, overrides the effect (only if was changed) right before calling the effect.
-     * - Note that you don't need to have an effect at all. You can use the return value and run your "effect" inline as well. */
-    useWith(depth: number | UIUpdateCompareMode, memory: Memory, newEffectIfChanged?: (() => void) | null): boolean;
+    use(memory: this["memory"], forceRun?: boolean, newEffectIfChanged?: (() => void) | null): boolean;
     /** Cancel effect. */
     cancel(skipUnmount?: boolean, clearEffect?: boolean): void;
+    /** Set the comparison depth using a number or the shortcut names in UIUpdateCompareMode. */
+    setDepth(depth?: number | UIUpdateCompareMode | null): void;
 }
 declare class UIEffect<Memory = any> extends UIEffect_base {
 }
+declare const createEffect: <Memory = any>(effect?: UIEffectOnMount, memory?: Memory | undefined) => UIEffect<Memory>;
 /** There are two ways you can use this:
  * 1. Call this to give basic UIEffect features.
  *      * For example: `class MyMix extends UIEffectMixin(MyBase) {}`
@@ -1858,12 +1879,15 @@ declare const uiDom: {
     MiniMixin: ClassBaseMixer<UIMini<{}>>;
     Ref: typeof UIRef;
     RefMixin: ClassBaseMixer<UIRef<Node | UISourceBoundary>>;
-    Effect: typeof UIEffect;
-    EffectMixin: ClassBaseMixer<UIEffect<any>>;
     Context: typeof UIContext;
     ContextMixin: ClassBaseMixer<UIContext<any, {}>>;
     /** ContextAttach flags to use with live.getAllContexts(flags: ContextAttach). */
     ContextAttach: typeof UIContextAttach;
+    Effect: typeof UIEffect;
+    EffectMixin: ClassBaseMixer<UIEffect<any>>;
+    createEffect: <Memory = any>(effect?: UIEffectOnMount | undefined, memory?: Memory | undefined) => UIEffect<Memory>;
+    createDataPicker: CreateDataPicker<any[], any>;
+    createDataSelector: CreateDataSelector<any[], any>;
     /** Allows to attach multiple contexts simultaneously.
      * Usage example: `<uiDom.Contexts cascade={{namedContexts}}><div/></uiDom.Contexts>` */
     Contexts: typeof UIContexts;
@@ -1904,8 +1928,6 @@ declare const uiDom: {
     createContexts: <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts]: Contexts[Name_2]["data"]; }>(contextsData: AllData) => Contexts;
     /** Create ref. */
     createRef: <Type extends Node | UISourceBoundary = Node | UISourceBoundary>() => UIRef<Type>;
-    /** Create effect. */
-    createEffect: <Memory = any>(effect?: UIEffectOnUnmount | undefined, memory?: Memory | undefined) => UIEffect<Memory>;
     /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own keyScope). */
     createSpread: <Props extends Dictionary<string, any> = {}>(func: UISpreadFunction<Props>) => {
         new (_props?: Props | null | undefined): {};
@@ -2002,4 +2024,4 @@ declare const uiDom: {
     range: (lengthOrStart: number, end?: number | undefined, stepSize?: number) => number[];
 };
 
-export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, Dictionary, DomElement, HTMLAttributes, HTMLAttributesAll, HTMLAttributesWithStyle, HTMLElementType, HTMLListenerAttributeNames, HTMLListenerAttributes, HTMLListenerAttributesAll, HTMLTags, NameValidator, NonDictionary, NullLike, PropType, RecordableType, RenderTextContentCallback, RenderTextTag, RenderTextTagCallback, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBoundaryTag, UIChangeInfos, UICloneNodeBehaviour, UIComponent, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHTMLPostProps, UIHTMLProps, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createHost, createLive, createMini, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };
+export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, CreateDataPicker, CreateDataSelector, DataExtractor, Dictionary, DomElement, HTMLAttributes, HTMLAttributesAll, HTMLAttributesWithStyle, HTMLElementType, HTMLListenerAttributeNames, HTMLListenerAttributes, HTMLListenerAttributesAll, HTMLTags, NameValidator, NonDictionary, NullLike, PropType, RecordableType, RenderTextContentCallback, RenderTextTag, RenderTextTagCallback, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBoundaryTag, UIBuildRemoteParams, UIChangeInfos, UICloneNodeBehaviour, UICompareDepthByMode, UIComponent, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHTMLPostProps, UIHTMLProps, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createDataPicker, createDataSelector, createEffect, createHost, createLive, createMini, createRef, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };

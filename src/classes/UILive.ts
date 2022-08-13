@@ -51,7 +51,6 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // Internal but public.
         public readonly wired: Set<UIWiredType> | null;
-        /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
         public readonly boundary: UILiveSource<AllContexts>;
 
         public updateModes: Partial<UIUpdateCompareModesBy>;
@@ -62,9 +61,12 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // - Init & Destroy - //
 
-        constructor(props: Props, ...args: any[]) {
+        constructor(props: Props, boundary?: UILiveSource<AllContexts, Remote>, ...args: any[]) {
             // Call.
             super(...args);
+            // Boundary should always be given - we just use this for more fluent TSX support.
+            if (boundary)
+                this.boundary = boundary;
             // Init.
             this.props = props;
             this.updateModes = {};
@@ -588,8 +590,8 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 // .. We don't really need the declaration for this class. Can it be avoided somehow?
 export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
     // We need a constructor here for typescript TSX.
-    constructor(props: Props, ...args: any[]) {
-        super(props, ...args);
+    constructor(props: Props, boundary?: UILiveSource<AllContexts, Remote>, ...args: any[]) {
+        super(props, boundary, ...args);
     }
 }
 /** Create a UILive functional component. */

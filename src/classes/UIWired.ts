@@ -9,7 +9,7 @@ import {
     UIRenderOutput,
 } from "../static/_Types";
 import { _Defs } from "../static/_Defs";
-import { UISourceBoundary } from "./UIBoundary";
+import { UIMiniSource, UISourceBoundary } from "./UIBoundary";
 import { UIMini } from "./UIMini";
 import { uiContent } from "../uiDom";
 
@@ -35,27 +35,33 @@ export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps
 
     // Settings that will be used for UIMini purposes (automatically used by all instances).
     public static updateMode: UIUpdateCompareMode | null;
-    public static shouldUpdate?(preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
-    // public static beforeUpdate?(preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
+    public static uiWillMount?(boundary: UIMiniSource): void;
+    public static uiDidMount?(boundary: UIMiniSource): void;
+    public static uiShouldUpdate?(boundary: UIMiniSource, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
+    public static uiBeforeUpdate?(boundary: UIMiniSource, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
+    public static uiDidUpdate?(boundary: UIMiniSource, prevProps: Dictionary | null, newProps: Dictionary | null): void;
+    public static uiDidMove?(boundary: UIMiniSource): void;
+    public static uiWillUnmount?(boundary: UIMiniSource): void;
 
     // Listeners.
-    static wiredDidMount?(wired: UIWired, boundary: UISourceBoundary): void;
+    static wiredWillMount?(wired: UIWired, boundary: UISourceBoundary): void;
     static wiredWillUnmount?(wired: UIWired, boundary: UISourceBoundary): void;
 
-    // For startup and JSX.
-    constructor(props: BaseProps, updateMode: UIUpdateCompareMode | null = null) {
-        super(props, updateMode);
+    // For startup and TSX.
+    constructor(props: BaseProps, boundary?: UIMiniSource, updateMode: UIUpdateCompareMode | null = null) {
+        super(props, boundary, updateMode);
     }
 
     render(): UIRenderOutput { return uiContent; }
 
 }
 
-/** The static class type for UIWired that is extended when creates a wired source. */
+/** The static class type for UIWired that is extended when creates a wired source.
+ * Note that you can use the UIMini callbacks, they are called after calling them on the instance (if even were there). */
 export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps> = {
 
     // Constructor.
-    new (_props?: BaseProps | null): UIWired<BaseProps>;
+    new (_props?: BaseProps | null, _boundary?: UISourceBoundary): UIWired<BaseProps>;
 
     readonly UI_DOM_TYPE: "Wired";
 
@@ -85,13 +91,18 @@ export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps 
      * - This is most often called by the static refresh method above, with props coming from Wired.builder. */
     setProps(props: WiredProps, update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
 
-    // Settings that will be used for UIMini purposes (automatically used by all instances).
-    shouldUpdate?(preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
-    // beforeUpdate?(preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
 
-    // Listeners.
-    wiredDidMount?(wired: UIWired<BaseProps>, boundary: UISourceBoundary): void;
-    wiredWillUnmount?(wired: UIWired<BaseProps>, boundary: UISourceBoundary): void;
+    // Settings that will be used for UIMini purposes (automatically used by all instances).
+    /** Special call for wired only - called right after constructing the wired instance. You can access the mini instance by boundary.mini. */
+    uiWillMount?(boundary: UIMiniSource<BaseProps>): void;
+    uiDidMount?(boundary: UIMiniSource<BaseProps>): void;
+    /** On wired, the static .uiShouldUpdate is not called if the instance had .uiShouldUpdate and it returned a boolean.
+     * - Otherwise, this is called and can affect the outcome normally. */
+    uiShouldUpdate?(boundary: UIMiniSource<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
+    uiBeforeUpdate?(boundary: UIMiniSource<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
+    uiDidUpdate?(boundary: UIMiniSource<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
+    uiDidMove?(boundary: UIMiniSource<BaseProps>): void;
+    uiWillUnmount?(boundary: UIMiniSource<BaseProps>): void;
 
 };
 

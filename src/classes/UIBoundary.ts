@@ -20,7 +20,7 @@ import { _Defs } from "../static/_Defs";
 import { _Apply } from "../static/_Apply";
 import { UIMini } from "./UIMini";
 import { UIWired, UIWiredType } from "./UIWired";
-import { UILive, UILiveMixin } from "./UILive";
+import { UILive } from "./UILive";
 import { UIHost } from "./UIHost";
 import { UIContext } from "./UIContext";
 import { UIContextApi } from "./UIContextApi";
@@ -304,61 +304,72 @@ export class UISourceBoundary extends UIBaseBoundary {
         // Setup the rendering.
         let tag = this._outerDef.tag;
         if (typeof tag === "function") {
+            // We must assign contentApi and contextApi before we construct the classes.
+            let Mini: ClassType<UIMini> | null = null;
+            let Live: ClassType<UILive> | null = null;
+            let renderer: UIMiniFunction | UILiveFunction | UILive["render"] | null = null;
+            // Handle by type.
             switch(tag["UI_DOM_TYPE"]) {
                 // Is a functional renderer.
                 case undefined:
                     // Mini.
                     if (tag.length < 2) {
                         this.type = "mini";
-                        this.mini = new UIMini(this._outerDef.props || {});
-                        this.mini.render = this._outerDef.tag as UIMiniFunction;
+                        Mini = UIMini;
+                        renderer = this._outerDef.tag as UIMiniFunction;
                     }
                     // Live.
                     else {
-                        // Create a UILive instance.
                         this.type = "live";
-                        const QClass = class extends UILiveMixin(Object) {};
-                        this.live = new QClass(this._outerDef.props || {});
-                        this.live.render = this._outerDef.tag as UILive["render"];
+                        Live = UILive;
+                        renderer = this._outerDef.tag as UILive["render"];
                     }
                     break;
                 // Class type.
                 case "Live":
                     this.type = "class-live";
-                    this.live = new (tag as ClassType<UILive>)(this._outerDef.props);
+                    Live = tag as ClassType<UILive>;
                     break;
                 case "Mini":
                     this.type = "class-mini";
-                    this.mini = new (tag as ClassType<UIMini>)(this._outerDef.props);
-                    this.mini.render = this._outerDef.tag as UIMiniFunction;
+                    Mini = tag as ClassType<UIMini>;
+                    renderer = this._outerDef.tag as UIMiniFunction;
                     break;
                 case "Wired":
                     this.type = "class-wired";
-                    const Wired = tag as UIWiredType;
-                    this.mini = new Wired(this._outerDef.props);
-                    Wired.boundaries.add(this);
-                    if (Wired.wiredDidMount)
-                        Wired.wiredDidMount(this.mini as UIWired, this);
+                    Mini = tag as UIWiredType;
                     break;
             }
             // Prepare for contentApi.
-            const readChildren = this.live || this.mini ? (shallowCopy: boolean = true): UIDefTarget[] | null => {
+            const readChildren = Live || Mini ? (shallowCopy: boolean = true): UIDefTarget[] | null => {
                 const defs = this.closure.envelope?.targetDef.childDefs || null;
                 return defs && (shallowCopy ? defs.slice() : defs);
             } : null;
             // For live.
-            if (this.live) {
+            if (Live) {
+                // Content and context api.
                 this.contentApi = new UIContentApi(readChildren);
                 this.contextApi = new UIContextApi(this as UILiveSource);
-                // We set a readonly value here - it's on purpose: we want it to be readonly for all others except these lines here.
-                (this.live as { boundary: UILiveSource }).boundary = this as UILiveSource;
+                // Constructor and assign renderer.
+                this.live = new Live(this._outerDef.props || {}, this);
+                if (renderer)
+                    this.live.render = renderer as UILive["render"];
             }
             // Assign one way reading for mini.
-            if (this.mini) {
+            if (Mini) {
+                // Content api.
                 this.contentApi = new UIContentApi(readChildren);
-                this.mini.isMounted = (): boolean => this.isMounted === true;
-                this.mini.getChildren = this.contentApi.getChildren.bind(this.contentApi);
-                this.mini.needsChildren = this.contentApi.needsChildren.bind(this.contentApi);
+                // Constructor and assign renderer.
+                this.mini = new Mini(this._outerDef.props || {}, this);
+                if (renderer)
+                    this.mini.render = renderer as UIMiniFunction;
+                // Handle Wired.
+                if (this.type === "class-wired") {
+                    const Wired = Mini as UIWiredType;
+                    Wired.boundaries.add(this);
+                    if (Wired.uiWillMount)
+                        Wired.uiWillMount(this as UIMiniSource);
+                }
             }
         }
     }
@@ -436,7 +447,13 @@ export class UISourceBoundary extends UIBaseBoundary {
 
 }
 
-export interface UILiveSource<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}> extends UISourceBoundary {
+export interface UILiveSource<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}> extends UISourceBoundary {
+    contentApi: UIContentApi;
     contextApi: UIContextApi<AllContexts, Remote>;
-    live: UILive<{}, {}, Remote, AllContexts, {}>;
+    live: UILive<Props, State, Remote, AllContexts, {}>;
+}
+
+export interface UIMiniSource<Props extends Dictionary = {}> extends UISourceBoundary {
+    contentApi: UIContentApi;
+    mini: UIMini<Props>;
 }
