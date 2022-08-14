@@ -1,3 +1,15 @@
+## v2.1.1
+
+### Package
+
+- Changed the "require" way of importing to include directly the `uiDom` shortcut object instead of `{ uiDom }`. 
+
+### Dev clean up
+
+- Some clean up in (mostly internal) comments.
+
+---
+
 ## v2.1.0
 
 ### Features
@@ -8,7 +20,7 @@
   - Added all the basic life cycle calls to `UIWired` as static with the boundary as an extra first param.
   - In addition, they are called always - after the `UIMini` instance called if any. The only exception if the instance has `.uiShouldUpdate` and returns a boolean: in that case, won't call `.uiShouldUpdate` on the wired static part.
 - Implemented **createDataPicker** and **createDataSelector** that resemble `reselect` feature in Redux.
-  - Firstly, it's worth noting that in uiDom the refreshes are "precise" (based on interests in data structure), where as in the Redux environment all the reducers are triggered and then it's checked whether their returned values did change or not, which in turn causes the updates in components who often use the dataSelector feature. Because of this, the data selector is essential in the React-Redux framework, whereas it's an auxiliary tool in uiDom framework.
+  - Firstly, it's worth noting that in uiDom the refreshes are "precise" (based on interests in data structure), where as in the Redux environment all the reducers are triggered and then it's checked whether their returned values did change or not, which in turn causes the updates in connected components (using the `createSelector` feature). Because of this, the data selector is essential in the React-Redux framework, whereas it's an auxiliary tool in uiDom framework.
     - Actually, similarly to reducers the `buildRemote` method in `UILive` does support the special case of checking if the data is identical with the previous one - if so it omits the contexts part from further update checking. (Of course this whole thing only happens, if the defined interests were triggered - not for all.)
   - In other words, you don't need to use the concept of reselecting at all in uiDom. It's however provided for three main reasons:
     1. Sometimes you need to do some heavy process (based on conditions), so you can do it in the selector. (Note that you could also utilize standalone `UIEffect` for this purpose.)
@@ -17,7 +29,7 @@
   - It's also implemented differently than in React-Redux:
     - The picker and selector both accept two arguments: (extractor, selector). The 2nd argument is the callback that returns the new data selection using the return values of the extractor. For the picker the 1st argument is an extractor function, while for the selector it's an array of extractor functions.
     - The reason for difference with Redux is three-fold:
-      1. The extractors anyway receive same arguments - why not just replace it be one extractor and use less func calls. (Debatably, the usage might also be easier to understand for newcomers.)
+      1. The extractors anyway receive the same arguments - why not just replace it be one extractor and use less func calls. (Debatably, the usage might also be easier to understand for newcomers.)
       2. To make the typing enormously lighter. (You might have noticed your IDE getting really slow when creating / mangling typed data selectors in React-Redux environment.)
       3. It's also more straightforward to write the typing support for this (as a dev).
   - It can be used with manual typing or automated typing mode. To unleash the automated typing you need to redefine the `uiDom.createDataPicker` with a `CreateDataPicker` type. For example: `const myDataPicker = (uiDom.createDataPicker as CreateDataPicker<Params, Data>)( extractor, selector ) `.
@@ -34,6 +46,7 @@
 
 ### Fixes
 
+- Fixed that for class based components the contextual (and children) features with contextApi and contentApi are assigned before instancing the class. To make the features possible in the constructor, added boundary as the second constructor parameter to `UIMini` and `UILive` - this way, the featues will become available after calling `super` in the constructor.
 - Fixed that for class based components the contextApi and contentApi are assigned before instancing the class. To make this possibly, added boundary as the second constructor parameter to `UIMini` and `UILive` - this way, they will have it before the extending constructor is run (but after the init constructor has run, so can attach the features).
 
 ### Dev clean up

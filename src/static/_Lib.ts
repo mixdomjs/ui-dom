@@ -312,7 +312,7 @@ export const _Lib = {
                     for (const [k, v] of a) {
                         if (!b.has(k))
                             return false;
-                        else if (!_Lib.areEqual(b.get(k), v, nDepth))
+                        if (nDepth ? !_Lib.areEqual(b.get(k), v, nDepth) : b.get(k) !== v)
                             return false;
                     }
                     return true;
@@ -329,7 +329,7 @@ export const _Lib = {
                 if (count !== b.length)
                     return false;
                 for (let i=0; i<count; i++)
-                    if (!_Lib.areEqual(a[i], b[i], nDepth))
+                    if (nDepth ? !_Lib.areEqual(a[i], b[i], nDepth) : a[i] !== b[i])
                         return false;
             }
             // Anything object-like - hoping that works for anything else.
@@ -339,7 +339,7 @@ export const _Lib = {
                 for (const p in b) {
                     if (!a.hasOwnProperty(p))
                         return false;
-                    if (!_Lib.areEqual(a[p], b[p], nDepth))
+                    if (nDepth ? !_Lib.areEqual(a[p], b[p], nDepth) : a[p] !== b[p])
                         return false;
                 }
                 // Deleted.

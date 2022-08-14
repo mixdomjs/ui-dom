@@ -1,7 +1,5 @@
 
-// The shortcuts from uiDom (and UIDom alias).
-export { uiDom } from "./uiDom";
-
-// I guess, it's enough / correct to just output the shortcut.
-// export * from "./static/_Types";
-// export * from "./index";
+// Let's just export the uiDom shortcut objects.
+// .. Any typing will be found in the typing file.
+import { uiDom } from "./uiDom";
+export default uiDom;

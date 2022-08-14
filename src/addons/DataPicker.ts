@@ -42,9 +42,11 @@ export type CreateDataSelector<Params extends any[] = any[], Data = any> = <
     S18 extends DataExtractor<Params>,
     S19 extends DataExtractor<Params>,
     S20 extends DataExtractor<Params>,
-    SelectorArgs extends [ ReturnType<S1>, ReturnType<S2>, ReturnType<S3>, ReturnType<S4>, ReturnType<S5>, ReturnType<S6>, ReturnType<S7>, ReturnType<S8>, ReturnType<S9>, ReturnType<S10>, ReturnType<S11>, ReturnType<S12>, ReturnType<S13>, ReturnType<S14>, ReturnType<S15>, ReturnType<S16>, ReturnType<S17>, ReturnType<S18>, ReturnType<S19>, ReturnType<S20> ],
->(extractors: [S1?, S2?, S3?, S4?, S5?, S6?, S7?, S8?, S9?, S10?, S11?, S12?, S13?, S14?, S15?, S16?, S17?, S18?, S19?, S20?], selector: (...args: SelectorArgs) => Data, depth?: number | UIUpdateCompareMode)
-    => (...args: SelectorArgs) => Data;
+>(
+    extractors: [S1?, S2?, S3?, S4?, S5?, S6?, S7?, S8?, S9?, S10?, S11?, S12?, S13?, S14?, S15?, S16?, S17?, S18?, S19?, S20?],
+    selector: (...args: [ ReturnType<S1>, ReturnType<S2>, ReturnType<S3>, ReturnType<S4>, ReturnType<S5>, ReturnType<S6>, ReturnType<S7>, ReturnType<S8>, ReturnType<S9>, ReturnType<S10>, ReturnType<S11>, ReturnType<S12>, ReturnType<S13>, ReturnType<S14>, ReturnType<S15>, ReturnType<S16>, ReturnType<S17>, ReturnType<S18>, ReturnType<S19>, ReturnType<S20> ]) => Data,
+    depth?: number | UIUpdateCompareMode
+) => (...args: Params) => Data;
 
 /** Create a data picker: It's like UIEffect but for data with an intermediary extractor.
  * - Give an extractor that extracts an array out of your customly defined arguments.
@@ -91,7 +93,7 @@ export const createDataSelector: CreateDataSelector = (extractors, selector, dep
 //
 // // It's recommended to use with automatic typing.
 // // .. All we need to do is redefine createDataPicker with a more refined CreateDataPicker type.
-// // .. Then all the typing can be figured out for the extractor, builder as well as when calling to get the data.
+// // .. Then all the typing can be figured out for the extractor, selector, output and when calling the picker.
 // const codeViewDataPicker =
 //     (createDataPicker as CreateDataPicker<UIBuildRemoteParams<MyAllContexts>, MyData>)(
 //
@@ -102,7 +104,7 @@ export const createDataSelector: CreateDataSelector = (extractors, selector, dep
 //         allData.settings?.typescript || false,
 //     ] as const, // <-- Needs this little trick here.
 //
-//     // Picker.
+//     // Picker - it's only called if the extracted data items were changed from last time.
 //     (theme, typescript) => ({ theme, typescript })
 //
 // );
@@ -110,15 +112,14 @@ export const createDataSelector: CreateDataSelector = (extractors, selector, dep
 // // With manual typing - not recommended.
 // const codeViewDataPicker_MANUAL = createDataPicker(
 //
-//     // Extractor - showcases the usage for contexts.
-//     // .. For example, if has many components with similar context data needs.
+//     // Extractor.
 //     (...[allData, _allContexts]: UIBuildRemoteParams<MyAllContexts>) => [
 //         allData.settings?.themes.selected || "dark",
 //         allData.settings?.typescript || false,
 //     ] as const, // <-- Needs this little trick here.
 //
-//     // Builder - it will only be called if the extracted were changed.
-//     (theme, typescript) => ({ theme, typescript })
+//     // Picker.
+//     (theme, typescript): MyData => ({ theme, typescript })
 // );
 //
 //
@@ -137,7 +138,7 @@ export const createDataSelector: CreateDataSelector = (extractors, selector, dep
 //     (theme, typescript) => ({ theme, typescript })
 // );
 //
-// // With manual typing.
+// // With manual typing - not recommended.
 // // .. One place that cannot be reached by typing is the params to the selector that's returned (so when actually used, it's not typed).
 // const codeViewDataSelector_MANUAL = createDataSelector(
 //
@@ -232,8 +233,8 @@ export const createDataSelector: CreateDataSelector = (extractors, selector, dep
 // // - - ALT: UIDataEffect mixin - - //
 // // - - - - - - - - - - - - - - - - //
 // //
-// // .. As a mixin is not unfortunately that much use - mostly due to the main idea of the feature.
-// // .. We really wanna create it with the func, and most often use it as a func (not class).
+// // .. As a mixin is not of that much use - mostly due to the main idea of the feature.
+// // .. We really wanna create it with the func, and most often use it as a func (not class nor mixin).
 //
 // import { ClassBaseMixer, ClassType, UIUpdateCompareMode } from "../static/_Types";
 // import { UIEffect, UIEffectMixin } from "./UIEffect";

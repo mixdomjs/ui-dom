@@ -21,7 +21,7 @@ import { createContext, createContexts, UIContext, UIContextMixin, UIContexts } 
 
 // Tools.
 import { createEffect, UIEffect, UIEffectMixin } from "./addons/UIEffect";
-import { createDataPicker, createDataSelector } from "./addons/DataPicker";
+import { createDataPicker, createDataSelector, CreateDataPicker, CreateDataSelector } from "./addons/DataPicker";
 
 
 

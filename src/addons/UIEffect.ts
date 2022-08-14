@@ -21,7 +21,7 @@ function _UIEffectMixin<Memory = any>(Base: ClassType) {
         memory: Memory;
         onMount: UIEffectOnMount | null;
         onUnmount: UIEffectOnUnmount | null;
-        depth: number; // | UIUpdateCompareMode;
+        depth: number;
 
         constructor(effect?: UIEffectOnMount, memory?: Memory, ...baseParams: any[]) {
             super(...baseParams);
@@ -80,7 +80,7 @@ export interface UIEffect<Memory = any> {
     memory: Memory;
     //
     // <-- Note that this type is not used elsewhere below.
-    // ... This is to allow more flexible mixin use with redefined memory (will use that).
+    // ... This is to allow more flexible mixin use with redefined memory.
 
     /** The effect to run, when has changed.
      * - If returns a function, will replace the effect after (for the next time). */

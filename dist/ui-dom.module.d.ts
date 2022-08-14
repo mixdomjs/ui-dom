@@ -1787,24 +1787,6 @@ declare type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps
 };
 declare const createWired: <BaseProps extends Dictionary<string, any> = {}, WiredProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps>(funcOrClass: UIComponent<MixedProps>, builderOrProps?: WiredProps | Builder | null | undefined, mixer?: Mixer | undefined, ...params: Params) => UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
 
-declare type DataExtractor<P extends any[] = any[], R = any> = (...args: P) => R;
-/** This helps to create a fully typed data picker with one extractor that outputs an array.
- * - It returns a callback that can be used for selecting (like in Redux). */
-declare type CreateDataPicker<Params extends any[] = any[], Data = any> = <Extractor extends DataExtractor<Params>, Extracted extends ReturnType<Extractor> = ReturnType<Extractor>>(extractor: Extractor, selector: (...args: Extracted) => Data, depth?: number | UIUpdateCompareMode) => (...args: Params) => Data;
-/** This helps to create a fully typed data selector with multiple extractors (each outputting any value) as an array.
- * - It returns a callback that can be used for selecting (like in Redux).
- * - The typing supports up to 20 extractors. */
-declare type CreateDataSelector<Params extends any[] = any[], Data = any> = <S1 extends DataExtractor<Params>, S2 extends DataExtractor<Params>, S3 extends DataExtractor<Params>, S4 extends DataExtractor<Params>, S5 extends DataExtractor<Params>, S6 extends DataExtractor<Params>, S7 extends DataExtractor<Params>, S8 extends DataExtractor<Params>, S9 extends DataExtractor<Params>, S10 extends DataExtractor<Params>, S11 extends DataExtractor<Params>, S12 extends DataExtractor<Params>, S13 extends DataExtractor<Params>, S14 extends DataExtractor<Params>, S15 extends DataExtractor<Params>, S16 extends DataExtractor<Params>, S17 extends DataExtractor<Params>, S18 extends DataExtractor<Params>, S19 extends DataExtractor<Params>, S20 extends DataExtractor<Params>, SelectorArgs extends [ReturnType<S1>, ReturnType<S2>, ReturnType<S3>, ReturnType<S4>, ReturnType<S5>, ReturnType<S6>, ReturnType<S7>, ReturnType<S8>, ReturnType<S9>, ReturnType<S10>, ReturnType<S11>, ReturnType<S12>, ReturnType<S13>, ReturnType<S14>, ReturnType<S15>, ReturnType<S16>, ReturnType<S17>, ReturnType<S18>, ReturnType<S19>, ReturnType<S20>]>(extractors: [S1?, S2?, S3?, S4?, S5?, S6?, S7?, S8?, S9?, S10?, S11?, S12?, S13?, S14?, S15?, S16?, S17?, S18?, S19?, S20?], selector: (...args: SelectorArgs) => Data, depth?: number | UIUpdateCompareMode) => (...args: SelectorArgs) => Data;
-/** Create a data picker: It's like UIEffect but for data with an intermediary extractor.
- * - Give an extractor that extracts an array out of your customly defined arguments.
- * - Whenever the extracted output has changed (in shallow sense by default), the selector will be run.
- * - The arguments of the selector is the extracted array spread out, and it should return the output data solely based on them.
- * - The whole point of this abstraction, is to trigger the presumably expensive selector call only when the cheap extractor func tells there's a change. */
-declare const createDataPicker: CreateDataPicker;
-/** Create a data selector: It's like the DataPicker above, but takes in an array of extractors (not just one).
- * - Accordingly the outputs of extractors are then spread out as the arguments for the selector. */
-declare const createDataSelector: CreateDataSelector;
-
 /** Effect to run when memory has changed (according to the comparison mode).
  * - If returns a new effect function, it will be run when unmounting the effect. */
 declare type UIEffectOnMount = (...args: any[]) => void | UIEffectOnUnmount;
@@ -1824,7 +1806,7 @@ declare const UIEffect_base: {
         toString(): string;
         toLocaleString(): string;
         valueOf(): Object;
-        hasOwnProperty(v: PropertyKey): boolean; /** Set the comparison depth using a number or the shortcut names in UIUpdateCompareMode. */
+        hasOwnProperty(v: PropertyKey): boolean;
         isPrototypeOf(v: Object): boolean;
         propertyIsEnumerable(v: PropertyKey): boolean;
     };
@@ -1865,6 +1847,24 @@ declare const createEffect: <Memory = any>(effect?: UIEffectOnMount, memory?: Me
  *      * For example: `class MyMix extends (UIEffectMixin as ClassBaseMixer<UIEffect<MyMemory>>)(MyBase) {}`
  */
 declare const UIEffectMixin: ClassBaseMixer<UIEffect<any>>;
+
+declare type DataExtractor<P extends any[] = any[], R = any> = (...args: P) => R;
+/** This helps to create a fully typed data picker with one extractor that outputs an array.
+ * - It returns a callback that can be used for selecting (like in Redux). */
+declare type CreateDataPicker<Params extends any[] = any[], Data = any> = <Extractor extends DataExtractor<Params>, Extracted extends ReturnType<Extractor> = ReturnType<Extractor>>(extractor: Extractor, selector: (...args: Extracted) => Data, depth?: number | UIUpdateCompareMode) => (...args: Params) => Data;
+/** This helps to create a fully typed data selector with multiple extractors (each outputting any value) as an array.
+ * - It returns a callback that can be used for selecting (like in Redux).
+ * - The typing supports up to 20 extractors. */
+declare type CreateDataSelector<Params extends any[] = any[], Data = any> = <S1 extends DataExtractor<Params>, S2 extends DataExtractor<Params>, S3 extends DataExtractor<Params>, S4 extends DataExtractor<Params>, S5 extends DataExtractor<Params>, S6 extends DataExtractor<Params>, S7 extends DataExtractor<Params>, S8 extends DataExtractor<Params>, S9 extends DataExtractor<Params>, S10 extends DataExtractor<Params>, S11 extends DataExtractor<Params>, S12 extends DataExtractor<Params>, S13 extends DataExtractor<Params>, S14 extends DataExtractor<Params>, S15 extends DataExtractor<Params>, S16 extends DataExtractor<Params>, S17 extends DataExtractor<Params>, S18 extends DataExtractor<Params>, S19 extends DataExtractor<Params>, S20 extends DataExtractor<Params>>(extractors: [S1?, S2?, S3?, S4?, S5?, S6?, S7?, S8?, S9?, S10?, S11?, S12?, S13?, S14?, S15?, S16?, S17?, S18?, S19?, S20?], selector: (...args: [ReturnType<S1>, ReturnType<S2>, ReturnType<S3>, ReturnType<S4>, ReturnType<S5>, ReturnType<S6>, ReturnType<S7>, ReturnType<S8>, ReturnType<S9>, ReturnType<S10>, ReturnType<S11>, ReturnType<S12>, ReturnType<S13>, ReturnType<S14>, ReturnType<S15>, ReturnType<S16>, ReturnType<S17>, ReturnType<S18>, ReturnType<S19>, ReturnType<S20>]) => Data, depth?: number | UIUpdateCompareMode) => (...args: Params) => Data;
+/** Create a data picker: It's like UIEffect but for data with an intermediary extractor.
+ * - Give an extractor that extracts an array out of your customly defined arguments.
+ * - Whenever the extracted output has changed (in shallow sense by default), the selector will be run.
+ * - The arguments of the selector is the extracted array spread out, and it should return the output data solely based on them.
+ * - The whole point of this abstraction, is to trigger the presumably expensive selector call only when the cheap extractor func tells there's a change. */
+declare const createDataPicker: CreateDataPicker;
+/** Create a data selector: It's like the DataPicker above, but takes in an array of extractors (not just one).
+ * - Accordingly the outputs of extractors are then spread out as the arguments for the selector. */
+declare const createDataSelector: CreateDataSelector;
 
 declare const uiDef: <Props extends Dictionary<string, any> = {}>(tagOrClass?: UIPreTag, origProps?: UIGenericProps<Props> | null, ...contents: UIRenderOutput[]) => UIDefTarget | null;
 declare const uiContent: UIDefTarget;
