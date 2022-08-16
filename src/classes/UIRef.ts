@@ -9,7 +9,7 @@ import {
     ClassType,
     ClassBaseMixer
 } from "../static/_Types";
-import { _Apply } from "../static/_Apply";
+import { _Find } from "../static/_Find";
 import { UIContentBoundary, UISourceBoundary } from "./UIBoundary";
 
 
@@ -55,7 +55,7 @@ function _UIRefMixin<Type extends Node | UISourceBoundary = Node | UISourceBound
                 if (treeNode.type === "dom")
                     nodes.push(treeNode.domNode as (Type & Node));
                 else if (!onlyForDomRefs)
-                    nodes = nodes.concat(_Apply.getTreeNodesForDomRootsUnder(treeNode, true).map(tNode => tNode.domNode as (Type & Node)));
+                    nodes = nodes.concat(_Find.rootDomTreeNodes(treeNode, true).map(tNode => tNode.domNode as (Type & Node)));
             }
             return nodes;
         }

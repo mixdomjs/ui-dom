@@ -238,14 +238,16 @@ export const _Defs = {
             action: "mounted"
         } as UIDefApplied;
         // Other non-changing based on type.
-        if (targetDef.isArray)
-            aDef.isArray = true;
+        if (aDef._uiDefType === "fragment") {
+            if (targetDef.isArray)
+                aDef.isArray = true;
+            if (targetDef.scopeType)
+                aDef.scopeType = targetDef.scopeType;
+        }
         else if (aDef._uiDefType === "pass")
             aDef.contentPass = contentClosure || null;
         else if (targetDef.host)
             aDef.host = targetDef.host;
-        if (targetDef.keyScope !== undefined)
-            aDef.keyScope = targetDef.keyScope;
         // Return applied def ready to go.
         return aDef;
     },

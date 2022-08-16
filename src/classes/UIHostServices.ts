@@ -10,7 +10,12 @@ import {
     UILiveNewUpdates,
     UILiveUpdates,
     UIChangeInfos,
+    UIDefTarget,
+    UIRenderOutput,
 } from "../static/_Types";
+import { _Lib } from "../static/_Lib";
+import { _Defs } from "../static/_Defs";
+import { _Find } from "../static/_Find";
 import { _Apply } from "../static/_Apply";
 import { UIRender } from "./UIRender";
 import { UILiveSource, UIMiniSource, UISourceBoundary } from "./UIBoundary";
@@ -32,6 +37,14 @@ export class UIHostServices {
 
     /** To create unique id (per uiHost) for each boundary, a simple counter is used. */
     private idCounter: number;
+
+
+    // Host root boundary helpers.
+    /** This is the target render definition that defines the host's root boundary's render output. */
+    private rootDef: UIDefTarget | null;
+    /** Temporary value (only needed for .onlyRunInContainer setting). */
+    private _rootIsDisabled?: true;
+
 
     // Listeners.
     private listeners: Record<"update" | "render", (() => void)[]>;
@@ -103,6 +116,48 @@ export class UIHostServices {
         const i = listeners.indexOf(callback);
         if (i !== -1)
             listeners.splice(i, 1);
+    }
+
+    // - Host root boundary helpers - //
+
+    public createRoot(content: UIRenderOutput) {
+        // Update root def.
+        this.rootDef = _Defs.createDefFromContent(content);
+        // Create a root boundary that will render our targetDef or null if disabled.
+        return () => this._rootIsDisabled ? null : this.rootDef;
+    }
+
+    public updateRoot(content: UIRenderOutput, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
+        // Create a def for the root class with given props and contents.
+        // .. We have a class, so we know won't be empty.
+        this.rootDef = _Defs.createDefFromContent(content);
+        // Restart.
+        this.uiHost.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
+    }
+
+    public refreshRoot(forceUpdate: boolean = false, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null) {
+        // Update state.
+        const wasEnabled = !this._rootIsDisabled;
+        const uiHost = this.uiHost;
+        const shouldRun = !(uiHost.settings.onlyRunInContainer && !uiHost.groundedTree.domNode && !uiHost.groundedTree.parent);
+        shouldRun ? delete this._rootIsDisabled : this._rootIsDisabled = true;
+        // Force update: create / destroy.
+        if (forceUpdate || !shouldRun || !wasEnabled)
+            uiHost.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
+        // Do moving.
+        else if (shouldRun && wasEnabled) {
+            // Get its root nodes.
+            const rHostInfos = uiHost.rootBoundary ? _Find.rootDomTreeNodes(uiHost.rootBoundary.treeNode, true).map(treeNode => ({ treeNode, move: true }) as UIDomRenderInfo) : [];
+            // Trigger render immediately - and regardless of whether had info (it's needed for a potential hosting host).
+            this.absorbChanges(rHostInfos, null, forceRenderTimeout);
+        }
+    }
+
+    clearRoot(forgetPending: boolean = false) {
+        // Clear timers.
+        this.clearTimers(forgetPending);
+        // Clear target.
+        this.rootDef = null;
     }
 
     // - Context pass (host to host) - //
@@ -239,8 +294,9 @@ export class UIHostServices {
 
     /** This is the core whole command to update a source boundary including checking if it should update and if has already been updated.
      * - It handles the _preUpdates bookkeeping and should update checking and return infos for changes.
-     * - It should only be called from a few places: 1. runUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries. */
-    public updateBoundary(boundary: UISourceBoundary, forceUpdate: boolean | "all" = false, movedNodes?: UITreeNode[], bInterested?: UISourceBoundary[]): UIChangeInfos | null {
+     * - It should only be called from a few places: 1. runUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries.
+     * - If gives bInterested, it's assumed to be be unordered, otherwise give areOrdered = true. */
+    public updateBoundary(boundary: UISourceBoundary, forceUpdate: boolean | "all" = false, movedNodes?: UITreeNode[], bInterested: UISourceBoundary[] = [], areOrdered: boolean = false): UIChangeInfos | null {
 
         // Parse.
         let shouldUpdate = !!forceUpdate;
@@ -248,9 +304,6 @@ export class UIHostServices {
         let renderInfos: UIDomRenderInfo[] = [];
         let boundaryChanges: UISourceBoundaryChange[] = [];
         const cApi = boundary.contextApi;
-        const doLocalInterests = !bInterested;
-        if (!bInterested)
-            bInterested = [];
 
         // Prepare mount run.
         if (!boundary.isMounted) {
@@ -347,7 +400,7 @@ export class UIHostServices {
                 }
                 // For clarity and robustness, we collect the render infos here for move, as we collect the boundary for move here, too.
                 // .. However, to support the flow of .applyDefPairs we also support an optional .movedNodes array to prevent doubles.
-                for (const node of _Apply.getTreeNodesForDomRootsUnder(boundary.baseTreeNode, true, true)) {
+                for (const node of _Find.rootDomTreeNodes(boundary.treeNode, true, true)) {
                     if (movedNodes) {
                         if (movedNodes.indexOf(node) !== -1)
                             continue;
@@ -360,7 +413,7 @@ export class UIHostServices {
             delete boundary._preUpdates;
 
             // Pre mark wired updates.
-            const allWired: Set<UIWiredType> | null = boundary.live && boundary.live.wired || null;
+            const allWired: Set<UIWiredType> | null = boundary.live && boundary.live.uiWired || null;
             if (allWired) {
                 for (const Wired of allWired) {
                     // Build new props - without doing the refresh (we'll do it below, if needed).
@@ -370,7 +423,7 @@ export class UIHostServices {
                     if (propsWere === Wired.props)
                         continue;
                     // Collect interested.
-                    for (const b of Wired.boundaries) {
+                    for (const b of Wired.uiBoundaries) {
                         // Mark forced pre-interests.
                         // .. It's as if there's a "black box" inside the wired renderer, we don't know how it'll react - so we must force update.
                         if (!b._preUpdates)
@@ -378,8 +431,10 @@ export class UIHostServices {
                         if (!b._preUpdates.force)
                             b._preUpdates.force = true;
                         // Add to interested.
-                        if (bInterested.indexOf(b) === -1)
+                        if (!bInterested.includes(b)) {
                             bInterested.push(b);
+                            areOrdered = false;
+                        }
                     }
                 }
             }
@@ -403,10 +458,37 @@ export class UIHostServices {
             renderInfos = renderInfos.concat(rInfos);
             boundaryChanges = boundaryChanges.concat(bUpdates);
         }
-
-        // Update interests wirings.
-        if (doLocalInterests && bInterested[0]) {
-            const uInfos = _Apply.updateInterested(bInterested, true); // Do sort - the tree order of wired instances is unknown and might change.
+        // Update contexts down the tree if was not updated and contexts were changed.
+        // .. Also add them to / merge them with bInterested, if found any interested.
+        else if (boundary._outerContextsWere) {
+            // Apply context changes down and collect interested.
+            let collected = _Apply.afterOuterContexts(boundary);
+            // Remove this boundary, if was added - we're currently handling it.
+            // .. Otherwise might trigger an empty update in a special case.
+            // .. The case is that a context is swapped off, but the value in remote still gives the same value.
+            if (collected[0] === boundary)
+                collected = collected.slice(1);
+            // Loop through locally interested.
+            if (collected[0]) {
+                // Merge from both (without duplicates) and sort.
+                if (bInterested[0]) {
+                    // Add each.
+                    areOrdered = false;
+                    for (const b of collected) {
+                        if (!bInterested.includes(b))
+                            bInterested.push(b);
+                    }
+                }
+                // Replace - the order is clean within our contextual collection.
+                else
+                    bInterested = collected;
+            }
+        }
+        // Update interested boundaries.
+        // .. Each is a child boundary of ours (sometimes nested deep inside).
+        // .. We have them from 3 sources: 1. interested in our content, 2. contextual changes cascaded down, 3. wired renderers.
+        if (bInterested[0]) {
+            const uInfos = UIHostServices.updateInterested(bInterested, !areOrdered);
             renderInfos = renderInfos.concat(uInfos[0]);
             boundaryChanges = boundaryChanges.concat(uInfos[1]);
         }
@@ -415,7 +497,6 @@ export class UIHostServices {
         return (renderInfos[0] || boundaryChanges[0]) ? [ renderInfos, boundaryChanges ] : null;
 
     }
-
 
     // - 2. Post process flow - //
 
@@ -460,11 +541,34 @@ export class UIHostServices {
 
     private refreshWithTimeout(side: "update" | "render", forceTimeout?: number | null) {
         if (side === "update")
-            this.updateTimer = _Apply.refreshWithTimeout(this, this.runUpdates, this.updateTimer, this.uiHost.settings.updateTimeout, forceTimeout);
+            this.updateTimer = _Lib.refreshWithTimeout(this, this.runUpdates, this.updateTimer, this.uiHost.settings.updateTimeout, forceTimeout);
         else
-            this.renderTimer = _Apply.refreshWithTimeout(this, this.flushRender, this.renderTimer, this.uiHost.settings.renderTimeout, forceTimeout);
+            this.renderTimer = _Lib.refreshWithTimeout(this, this.flushRender, this.renderTimer, this.uiHost.settings.renderTimeout, forceTimeout);
     }
 
+
+    private static updateInterested(bInterested: UISourceBoundary[], sortBefore: boolean = true): UIChangeInfos {
+        // Prepare return.
+        let renderInfos: UIDomRenderInfo[] = [];
+        let boundaryChanges: UISourceBoundaryChange[] = [];
+        // Sort, if needs and has at least two entries.
+        if (sortBefore)
+            _Apply.sortBoundaries(bInterested);
+        // Update each - if still needs to be updated (when the call comes).
+        for (const thruBoundary of bInterested) {
+            // Was already updated.
+            if (!thruBoundary._preUpdates)
+                continue;
+            // Update and collect.
+            const uInfos = thruBoundary.uiHost.services.updateBoundary(thruBoundary);
+            if (uInfos) {
+                renderInfos = renderInfos.concat(uInfos[0]);
+                boundaryChanges = boundaryChanges.concat(uInfos[1]);
+            }
+        }
+        // Return infos.
+        return [ renderInfos, boundaryChanges ];
+    }
 
     private static callBoundaryChanges(boundaryChanges: UISourceBoundaryChange[]) {
         // Loop each.

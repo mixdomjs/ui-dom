@@ -19,11 +19,14 @@ export class UISpread<Props extends Dictionary = {}> {
     /** The function to unfold the contents. Will be overridden by createSpread procedure. */
     static unfold(_props: Dictionary, _childDefs: UIDefTarget[]): UIDefTarget | null { return null; }
     /** The universal method to unfold the spread. (The others are static too but based on an extending class.)
-     * The contents are the cleaned childDefs that should replace any content pass. */
-    static unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[], keyScope: any): UIDefTarget | null {
+     * - The contents are the cleaned childDefs that should replace any content pass.
+     * - Wrapped in a fragment that provides scoping detection. */
+    static unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[]): UIDefTarget | null {
+        // We wrap everything in a fragment def marked with isSpread.
+        const baseDef: UIDefTarget = { _uiDefType: "fragment", childDefs: [ targetDef ], scopeType: "spread", tag: null };
         // Prepare to loop.
-        let toLoop: [UIDefTarget, UIDefTarget | null ][] = [ [ targetDef, null ] ];
-        let info: [UIDefTarget, UIDefTarget | null] | undefined;
+        let toLoop: [UIDefTarget, UIDefTarget ][] = [ [ targetDef, baseDef ] ];
+        let info: [UIDefTarget, UIDefTarget] | undefined;
         let hasTruePass = false;
         let iMain = 0;
         while (info = toLoop[iMain]) {
@@ -38,53 +41,24 @@ export class UISpread<Props extends Dictionary = {}> {
                 delete newDef.withContent; // We already handled it here on the static def side - must not be handled again.
                 if (!contents.length)
                     newDef.childDefs = [];
-                pDef ? pDef.childDefs[pDef.childDefs.indexOf(thisDef)] = newDef : targetDef = newDef;
+                pDef.childDefs[pDef.childDefs.indexOf(thisDef)] = newDef;
                 thisDef = newDef;
             }
-            // Assign key scope.
-            thisDef.keyScope = keyScope;
             // Replace content pass.
             if (thisDef._uiDefType === "pass") {
-                // Replace.
-                // .. If there's no parent, the spread directly rendered a content pass as root.
-                // .. In that case, we just replace the original targetDef with our contents.
+                // Create new, and add key.
                 const newDef: UIDefTarget = { _uiDefType: "fragment", tag: null, childDefs: [...contents] };
-                if (thisDef.key !== null)
+                if (thisDef.key != null)
                     newDef.key = thisDef.key;
-                pDef ? pDef.childDefs[pDef.childDefs.indexOf(thisDef)] = newDef : targetDef = newDef;
-                // Mark copy.
-                // .. We shall put keyScope to something else than the original scope (or our keyScope here).
-                // .. Note that we do not spread open any content pass inside our original contents. Instead, we just leave them as they are.
-                // .. Note also that we do this only for the copy: for the true pass, we want
-                if (hasTruePass || thisDef.contentPassType === "copy") {
-                    // Prepare to loop all inside.
-                    const copyScope = thisDef.key != null ? thisDef.key : null;
-                    let copyLoop: UIDefTarget[] = [ newDef ];
-                    let cParentDef: UIDefTarget | undefined;
-                    let iSub = 0;
-                    while (cParentDef = copyLoop[iSub]) {
-                        // Next.
-                        iSub++;
-                        // If has kids.
-                        if (cParentDef.childDefs[0]) {
-                            let iKid = 0;
-                            // Replace each kid.
-                            for (const kid of cParentDef.childDefs) {
-                                // Replace with a new.
-                                const newKid = (kid._uiDefType === "pass" ? kid : { ...kid, childDefs: [...kid.childDefs], keyScope: copyScope }) as UIDefTarget;
-                                cParentDef.childDefs[iKid] = newKid;
-                                // Next.
-                                iKid++;
-                            }
-                            // Add to loop.
-                            copyLoop = cParentDef.childDefs.concat(copyLoop.slice(iSub));
-                            iSub = 0;
-                        }
-                    }
-                }
-                // Is true pass, mark that we found it.
-                else
+                // Mark copy - or that has true pass now.
+                if (hasTruePass || thisDef.contentPassType === "copy")
+                    newDef.scopeType = "spread-copy";
+                else {
+                    newDef.scopeType = "spread-pass";
                     hasTruePass = true;
+                }
+                // Replace in parent.
+                pDef.childDefs[pDef.childDefs.indexOf(thisDef)] = newDef;
             }
             // Add kids.
             else if (thisDef.childDefs[0]) {
@@ -96,7 +70,7 @@ export class UISpread<Props extends Dictionary = {}> {
             }
         }
         // Return target - we might have modified it.
-        return targetDef;
+        return baseDef;
     }
 }
 /** UISpread is a totally static functionality. */
@@ -106,12 +80,7 @@ export const createSpread = <Props extends Dictionary = {}>(func: UISpreadFuncti
     /** The unfold method unique to this particular UISpread extended class. */
     static unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null {
         // Render the static function to get spread defs.
-        let subDef = _Defs.createDefFromContent( _UISpread.render(props) );
-        if (subDef) {
-            // Apply keyScope and contents to passes.
-            const keyScope = subDef.key == null ? _UISpread : subDef.key;
-            subDef = _UISpread.unfoldWith(subDef, childDefs, keyScope);
-        }
-        return subDef;
+        const subDef = _Defs.createDefFromContent( _UISpread.render(props) );
+        return subDef && _UISpread.unfoldWith(subDef, childDefs);
     }
 };

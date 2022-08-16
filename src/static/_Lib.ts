@@ -49,6 +49,7 @@ export const _Lib = {
         return range;
     },
 
+    /** Builds a record of { [key]: trueFalseLike }, which is useful for internal quick checks. */
     buildRecordable<T extends string = any>(types: RecordableType<T>): Partial<Record<T, any>> {
         if (types.constructor === Object)
             return types as Partial<Record<T, any>>;
@@ -58,22 +59,25 @@ export const _Lib = {
         return tTypes;
     },
 
-    // getWithFallback<Data extends any, DataKey extends NestedPaths<Data, NonDictionary, SafeIteratorDepthDefault>, SubData extends PropType<Data, DataKey>, FallbackData extends SubData | undefined>(data: Data, dataKey: DataKey, notFoundFallback?: FallbackData): WithFallback<FallbackData, SubData> {
-    //     // Prepare.
-    //     const dataKeys = dataKey.split(".");
-    //     const lastKey = dataKeys.pop() as string;
-    //     let d = data as Record<string, any>;
-    //     // Get nested.
-    //     for (const key of dataKeys) {
-    //         // Get.
-    //         d = d[key];
-    //         // Stop if not found.
-    //         if (!d)
-    //             return notFoundFallback as WithFallback<FallbackData, SubData>;
-    //     }
-    //     // Return deep data.
-    //     return d.hasOwnProperty(lastKey) ? d[lastKey] : notFoundFallback as WithFallback<FallbackData, SubData>;
-    // },
+    /** Generic helper for classes with timer and method to call to execute rendering with a very specific logic.
+     * - Returns the value that should be assigned as the stored timer (either existing one, new one or null). */
+    refreshWithTimeout<Obj extends object>(obj: Obj, callback: (this: Obj) => void, currentTimer: number | null, defaultTimeout: number | null, forceTimeout?: number | null): number | null {
+        // Clear old timer if was given a specific forceTimeout (and had a timer).
+        if (currentTimer !== null && forceTimeout !== undefined) {
+            window.clearTimeout(currentTimer);
+            currentTimer = null;
+        }
+        // Execute immediately.
+        const timeout = forceTimeout === undefined ? defaultTimeout : forceTimeout;
+        if (timeout === null)
+            callback.call(obj);
+        // Or setup a timer - unless already has a timer to be reused.
+        else if (currentTimer === null)
+            currentTimer = window.setTimeout(() => callback.call(obj), timeout);
+        // Return the timer.
+        return currentTimer;
+    },
+
 
     // - Html props - //
 

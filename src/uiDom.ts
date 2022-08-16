@@ -3,13 +3,18 @@
 // - Imports - //
 
 import {
+    RecordableType,
     UIGenericProps,
     UIDefTarget,
     UIRenderOutput,
-    UIContextAttach
+    UITreeNode,
+    UITreeNodeType,
+    UIContextAttach,
 } from "./static/_Types";
 import { _Lib } from "./static/_Lib";
 import { _Defs } from "./static/_Defs";
+import { _Find } from "./static/_Find";
+import { _Apply } from "./static/_Apply";
 import { UIFragment, UIPortal, UIElement } from "./classes/UIPseudoClasses";
 import { createSpread } from "./classes/UISpread";
 import { createRef, UIRef, UIRefMixin } from "./classes/UIRef";
@@ -21,13 +26,17 @@ import { createContext, createContexts, UIContext, UIContextMixin, UIContexts } 
 
 // Tools.
 import { createEffect, UIEffect, UIEffectMixin } from "./addons/UIEffect";
-import { createDataPicker, createDataSelector, CreateDataPicker, CreateDataSelector } from "./addons/DataPicker";
+import { createDataPicker, createDataSelector } from "./addons/DataPicker";
+import { UISourceBoundary } from "./classes/UIBoundary";
 
 
 
 // - Export shortcuts - //
 
+// Def.
 export const uiDef = _Defs.createDef;
+
+// Content.
 export const uiContent = _Defs.newContentPassDef();
 export const uiContentCopy = _Defs.newContentPassDef({}, true);
 export const uiWithContent = (...contents: UIRenderOutput[]) =>
@@ -118,9 +127,9 @@ export const uiDom = {
     /** Create ref. */
     createRef,
 
-    /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own keyScope). */
+    /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own pairing scope). */
     createSpread,
-    /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own keyScope). */
+    /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own pairing scope). */
     spread: createSpread,
     /** Create a LiveFunction omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
     createLive,
@@ -187,6 +196,20 @@ export const uiDom = {
         // Return def.
         return def;
     },
+
+
+    // - Finding stuff - //
+
+    findTreeNodesIn: (treeNode: UITreeNode, types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[] =>
+        _Find.treeNodesWithin(treeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator),
+    findBoundariesIn: (treeNode: UITreeNode, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] =>
+        _Find.treeNodesWithin(treeNode, { boundary: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[],
+    findDomNodesIn: <T extends Node = Node>(treeNode: UITreeNode, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[] =>
+        _Find.treeNodesWithin(treeNode, { dom: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.domNode) as T[],
+    queryDomElementIn: <T extends Element = Element>(treeNode: UITreeNode, selector: string, allowWithinBoundaries?: boolean, allowOverHosts?: boolean): T | null =>
+        _Find.domElementByQuery<T>(treeNode, selector, allowWithinBoundaries, allowOverHosts),
+    queryDomElementsIn: <T extends Element = Element>(treeNode: UITreeNode, selector: string, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean): T[] =>
+        _Find.domElementsByQuery<T>(treeNode, selector, maxCount, allowWithinBoundaries, allowOverHosts),
 
 
     // - Html attribute helpers - //

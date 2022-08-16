@@ -12,13 +12,12 @@ import {
     UIHostSettingsUpdate,
     UITreeNodeType,
     UIHostSettings,
-    UIDefTarget,
     UITreeNodeDom,
     UITreeNodeBoundary,
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { _Defs } from "../static/_Defs";
-import { _Apply } from "../static/_Apply";
+import { _Find } from "../static/_Find";
 import { UISourceBoundary } from "./UIBoundary";
 import { UIHostServices } from "./UIHostServices";
 
@@ -39,8 +38,6 @@ function _UIHostMixin(Base: ClassType) {
 
         // Semi private.
         services: UIHostServices;
-        targetDef: UIDefTarget | null;
-        _isDisabled?: true;
 
 
         // - Init - //
@@ -65,13 +62,11 @@ function _UIHostMixin(Base: ClassType) {
 
             // - Start up - //
 
-            // Create first def.
-            this.targetDef = _Defs.createDefFromContent(content);
-            // Create a root boundary that will render our targetDef or null if disabled.
-            const Root = () => this._isDisabled ? null : this.targetDef;
+            // Create root boundary with the first content.
+            const Root = this.services.createRoot(content);
             // Create base tree node for the root boundary.
             const sourceDef = _Defs.newAppliedDefBy({ _uiDefType: "boundary", tag: Root, props: {}, childDefs: [] }, null);
-            const baseTreeNode: UITreeNodeBoundary = {
+            const treeNode: UITreeNodeBoundary = {
                 type: "boundary",
                 def: sourceDef,
                 sourceBoundary: null,
@@ -83,12 +78,13 @@ function _UIHostMixin(Base: ClassType) {
                 children: [],
                 domNode: null
             };
-            this.groundedTree.children.push(baseTreeNode);
+            this.groundedTree.children.push(treeNode);
             // Create boundary.
-            this.rootBoundary = new UISourceBoundary(this, sourceDef, baseTreeNode);
+            this.rootBoundary = new UISourceBoundary(this, sourceDef, treeNode);
             if (this.rootBoundary.mini)
                 this.rootBoundary.mini.updateMode = "always";
-            baseTreeNode.boundary = this.rootBoundary;
+            treeNode.boundary = this.rootBoundary;
+            this.rootBoundary.reattach(false);
             // Run updates.
             this.services.absorbUpdates(this.rootBoundary, {});
         }
@@ -104,47 +100,24 @@ function _UIHostMixin(Base: ClassType) {
 
         // - Basic api - //
 
-        public update(content: UIRenderOutput, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
-            // Create a def for the root class with given props and contents.
-            // .. We have a class, so we know won't be empty.
-            this.targetDef = _Defs.createDefFromContent(content);
-            // Restart.
-            this.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
-        }
-
-        public clear(update: boolean = true, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
-            // Clear timers.
-            this.services.clearTimers(true);
-            // Clear target.
-            this.targetDef = null;
+        public clear(update: boolean = true, updateTimeout?: number | null, renderTimeout?: number | null): void {
+            // Clear.
+            this.services.clearRoot(true);
             // Update.
             if (update)
-                this.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
+                this.rootBoundary.update(true, updateTimeout, renderTimeout);
         }
 
+        public update(content: UIRenderOutput, updateTimeout?: number | null, renderTimeout?: number | null): void {
+            this.services.updateRoot(content, updateTimeout, renderTimeout);
+        }
 
         // - Refresh - //
 
-        /** This is useful for refreshing the container. */
-        public refresh(forceUpdate: boolean = false, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null) {
-            // Update state.
-            const wasEnabled = !this._isDisabled;
-            const shouldRun = !(this.settings.onlyRunInContainer && !this.groundedTree.domNode && !this.groundedTree.parent);
-            shouldRun ? delete this._isDisabled : this._isDisabled = true;
-            // Force update: create / destroy.
-            if (forceUpdate || !shouldRun || !wasEnabled)
-                this.rootBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
-            // Do moving.
-            else if (shouldRun && wasEnabled) {
-                // Get its root nodes.
-                const rHostInfos = this.rootBoundary ? this.rootBoundary.getTreeNodesForDomRoots(true).map(treeNode => ({ treeNode, move: true }) as UIDomRenderInfo) : [];
-                // Trigger render immediately - and regardless of whether had info (it's needed for a potential hosting host).
-                this.services.absorbChanges(rHostInfos, null, forceRenderTimeout);
-            }
+        public refresh(forceUpdate: boolean = false, updateTimeout?: number | null, renderTimeout?: number | null): void {
+            this.services.refreshRoot(forceUpdate, updateTimeout, renderTimeout);
         }
 
-        /** This performs a "refresh-render".
-         * .. In case forceDomRead is on will actually read from dom to look for real changes to be done. */
         public refreshRender(forceDomRead: boolean = false, forceRenderTimeout?: number | null) {
             // Go through the UITreeNode structure and refresh each.
             const refresh = forceDomRead ? "read" : true;
@@ -173,6 +146,8 @@ function _UIHostMixin(Base: ClassType) {
             this.services.absorbChanges(renderInfos, null, forceRenderTimeout);
         }
 
+        // - Move - //
+
         public moveInto(parent: Node | null, forceRenderTimeout?: number | null) {
             // Already there.
             if (this.groundedTree.domNode === parent)
@@ -180,19 +155,21 @@ function _UIHostMixin(Base: ClassType) {
             // Update.
             this.groundedTree.domNode = parent;
             // Create render infos.
-            const renderInfos = this.rootBoundary.getTreeNodesForDomRoots(true).map(treeNode => ({ treeNode, move: true }) as UIDomRenderInfo);
+            const renderInfos = _Find.rootDomTreeNodes(this.rootBoundary.treeNode, true).map(treeNode => ({ treeNode, move: true }) as UIDomRenderInfo);
             // Trigger render.
             if (renderInfos[0] || (forceRenderTimeout !== undefined))
                 this.services.absorbChanges(renderInfos, null, forceRenderTimeout);
         }
 
-        public modifySettings(settings: UIHostSettingsUpdate) {
+        // - Settings - //
+
+        public modifySettings(settings: UIHostSettingsUpdate): void {
             // Collect state before.
             const onlyRunWas = this.settings.onlyRunInContainer;
             const welcomeCtxsWas = this.settings.welcomeContextsUpRoot;
             // Do changes.
             UIHost.modifySettings(this.settings, settings);
-            // For special changes.
+            // Detect special changes.
             // .. Recheck contexts from host to host.
             if (welcomeCtxsWas !== undefined && welcomeCtxsWas !== settings.welcomeContextsUpRoot) {
                 const pHost = this.groundedTree.parent && this.groundedTree.parent.sourceBoundary && this.groundedTree.parent.sourceBoundary.uiHost;
@@ -208,61 +185,55 @@ function _UIHostMixin(Base: ClassType) {
         // - Getters - //
 
         public getRootDomNode(): Node | null {
-            return this.rootBoundary && this.rootBoundary.baseTreeNode.domNode;
+            return this.rootBoundary && this.rootBoundary.treeNode.domNode;
         }
 
         public getRootDomNodes(inNestedBoundaries: boolean = true): Node[] {
-            return this.rootBoundary ? _Apply.getTreeNodesForDomRootsUnder(this.rootBoundary.baseTreeNode, inNestedBoundaries, false).map(treeNode => treeNode.domNode) as Node[] : [];
+            return this.rootBoundary ? _Find.rootDomTreeNodes(this.rootBoundary.treeNode, inNestedBoundaries, false).map(treeNode => treeNode.domNode) as Node[] : [];
         }
 
-        public queryDomElement<T extends Element = Element>(selector: string, allowOverHosts: boolean = false): T | null {
-            return _Apply.queryDomElement<T>(this.groundedTree, selector, true, allowOverHosts);
+        public queryDomElement<T extends Element = Element>(selectors: string, allowOverHosts: boolean = false): T | null {
+            return _Find.domElementByQuery<T>(this.groundedTree, selectors, true, allowOverHosts);
         }
 
-        public queryDomElements<T extends Element = Element>(selector: string, maxCount: number = 0, allowOverHosts: boolean = false): T[] {
-            return _Apply.queryDomElements<T>(this.groundedTree, selector, maxCount, true, allowOverHosts);
+        public queryDomElements<T extends Element = Element>(selectors: string, maxCount: number = 0, allowOverHosts: boolean = false): T[] {
+            return _Find.domElementsByQuery<T>(this.groundedTree, selectors, maxCount, true, allowOverHosts);
         }
 
         public findDomNodes<T extends Node = Node>(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): T[] {
-            return _Apply.findTreeNodesWithin(this.groundedTree, { dom: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.domNode) as T[];
+            return _Find.treeNodesWithin(this.groundedTree, { dom: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.domNode) as T[];
         }
 
         public findBoundaries(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] {
-            return _Apply.findTreeNodesWithin(this.groundedTree, { boundary: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
+            return _Find.treeNodesWithin(this.groundedTree, { boundary: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
         }
 
-        public findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
-            return _Apply.findTreeNodesWithin(this.groundedTree, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, true, allowOverHosts, validator);
+        public findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
+            return _Find.treeNodesWithin(this.groundedTree, types && _Lib.buildRecordable<UITreeNodeType>(types), maxCount, true, allowOverHosts, validator);
         }
 
 
         // - Static - //
 
-        static modifySettings(baseSettings: UIHostSettings, updates: UIHostSettingsUpdate): boolean {
-            let didChange = false;
+        public static modifySettings(baseSettings: UIHostSettings, updates: UIHostSettingsUpdate): void {
             // Special case.
             if (updates.updateLiveModes) {
                 for (const prop in updates.updateLiveModes) {
                     const val = updates.updateLiveModes[prop];
-                    if (typeof val === "string") {
+                    if (typeof val === "string")
                         baseSettings.updateLiveModes[prop] = val;
-                        didChange = true;
-                    }
                 }
             }
             // Update simple values.
             for (const prop in updates) {
                 const val = updates[prop];
                 const type = typeof val;
-                if ((val === null) || (type === "boolean") || (type === "string") || (type === "number")) {
+                if ((val === null) || (type === "boolean") || (type === "string") || (type === "number"))
                     baseSettings[prop] = val;
-                    didChange = true;
-                }
             }
-            return didChange;
         }
 
-        static getDefaultSettings(settings?: UIHostSettingsUpdate | null): UIHostSettings {
+        public static getDefaultSettings(settings?: UIHostSettingsUpdate | null): UIHostSettings {
             // Default.
             const dSettings: UIHostSettings = {
                 // Timing.
@@ -290,9 +261,9 @@ function _UIHostMixin(Base: ClassType) {
                 // Rendering.
                 maxReRenders: 1,
                 renderTextTag: "",
-                renderInnerHtmlTag: "span",
+                renderHtmlDefTag: "span",
                 renderTextContent: null,
-                renderSvgNamespaceUri: "http://www.w3.org/2000/svg",
+                renderSvgNamespaceURI: "http://www.w3.org/2000/svg",
                 renderDomPropsOnSwap: true,
                 duplicateDomNodeBehaviour: "deep",
                 duplicateDomNodeHandler: null,
@@ -315,10 +286,9 @@ function _UIHostMixin(Base: ClassType) {
 
 export interface UIHost {
 
-    /** This represents abstractly what the final outcome looks like in dom.
-     * .. Each UITreeNode represents a domNode in the final dom.
-     * .. So if you gNode.domNode.parentNode === gNode.parent?.domNode. */
+    /** This represents abstractly what the final outcome looks like in dom. */
     groundedTree: UITreeNode;
+    /** The root boundary that renders whatever is fed to the host on .update or initial creation. */
     rootBoundary: UISourceBoundary;
     /** Internal services to keep the whole thing together and synchronized.
      * They are the semi-private internal part of UIHost, so separated into its own class. */
@@ -328,37 +298,51 @@ export interface UIHost {
      * - Otherwise rendering might have old settings, or setting.onlyRunInContainer might be uncaptured. */
     settings: UIHostSettings;
 
-    // State.
-    /** This is the target render definition that defines our render output. */
-    targetDef: UIDefTarget | null;
-
-    // Temporary.
-    /** Temporary value (for .onlyRunInContainer setting). */
-    _isDisabled?: true;
-
     // Basic methods.
+    /** Add a listener to the update or render cycle. Will be called after the processing is done. */
     addListener(type: "update" | "render", callback: () => void): void;
+    /** Remove a previously added update or render listener. */
     removeListener(type: "update" | "render", callback: () => void): void;
-    update(...contents: UIRenderOutput[]): void;
-    clear(update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
-    refresh(forceUpdate?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
-    refreshRender(forceDomRead?: boolean, forceRenderTimeout?: number | null): void;
-    moveInto(parent: Node | null, forceRenderTimeout?: number | null): void;
+    /** Clear whatever has been previously rendered - destroys all boundaries inside the rootBoundary. */
+    clear(update?: boolean, updateTimeout?: number | null, renderTimeout?: number | null): void;
+    /** Update the previously render content with new render output definitions. */
+    update(content: UIRenderOutput, updateTimeout?: number | null, renderTimeout?: number | null): void;
+    /** Triggers an update, optionally forces it. This is useful for refreshing the container. */
+    refresh(forceUpdate?: boolean, updateTimeout?: number | null, renderTimeout?: number | null): void;
+    /** Triggers a process that refreshes the dom nodes based on the current state.
+     * - In case forceDomRead is on will actually read from dom to look for real changes to be done.
+     * - Otherwise just reapplies the situation - as if some updates had not been done.
+     * - Note. This is a partly experimental feature - it's not assumed to be used in normal usage. */
+    refreshRender(forceDomRead?: boolean, renderTimeout?: number | null): void;
+    /** Move the host into another dom container. */
+    moveInto(parent: Node | null, renderTimeout?: number | null): void;
+    /** Modify previously given settings - supporting handling the related special cases:
+     *     1. welcomeContextsUpRoot: Immediately updates whether now has a context on the host or not.
+     *     2. onlyRunInContainer: Refreshes whether is visible or not (might destroy all / create all, if needed). */
     modifySettings(settings: UIHostSettingsUpdate): void;
 
     // Getters.
+    /** Get the root dom node (ours or by a nested boundary) - if has many, the first one (useful for insertion). */
     getRootDomNode(): Node | null;
+    /** Get all the root dom nodes - might be many if used with a fragment.
+     * - Optionally define whether to search in nested boundaries or not (by default does). */
     getRootDomNodes(inNestedBoundaries?: boolean): Node[];
-    queryDomElement<T extends Element = Element>(selector: string, allowOverHosts?: boolean): T | null;
-    queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, allowOverHosts?: boolean): T[];
+    /** Get the first dom element by a selectors within the host (like document.querySelector). Should rarely be used, but it's here if needed. */
+    queryDomElement<T extends Element = Element>(selectors: string, allowOverHosts?: boolean): T | null;
+    /** Get dom elements by a selectors within the host (like document.querySelectorAll). Should rarely be used, but it's here if needed. */
+    queryDomElements<T extends Element = Element>(selectors: string, maxCount?: number, allowOverHosts?: boolean): T[];
+    /** Find all dom nodes by an optional validator. */
     findDomNodes<T extends Node = Node>(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
+    /** Find all boundaries by an optional validator. */
     findBoundaries(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
+    /** Find all treeNodes by given types and an optional validator. */
     findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
 
 }
 /** This is the main class to orchestrate and start rendering. */
 export class UIHost extends _UIHostMixin(Object) { }
 
+/** Create a new host and start rendering into it. */
 export const createHost = (
     content?: UIRenderOutput,
     container?: HTMLElement | null,

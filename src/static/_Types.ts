@@ -320,7 +320,6 @@ export interface UILiveNewUpdates<Props extends Dictionary = {}, State extends D
 export type UIUpdateCompareMode = "always" | "changed" | "shallow" | "double" | "deep";
 /** Defines how often UILives should update for each updatable type: props, state, context.
  * .. If type not defined, uses the default value for it.
- * .. Note that all the pure checks skip identity check on the root object. This is very improtant for context param.
  * .. Note that the pure checks only check those types that have just been changed.
  */
 export interface UIUpdateCompareModesBy {
@@ -418,11 +417,11 @@ interface UIDefBase<Props extends UIGenericPostProps = UIGenericPostProps> {
     childDefs: UIDefApplied[] | UIDefTarget[];
 
     // Common optional.
-    /** This is used for spread functions.
-     * - Because they are spread out, we need to distinguish their defs from main render scope.
-     * - Preferably the are distinguished from other spreads, too, but it's technically difficult.
-     *   .. However, if gives a key to the spread function (when uses it), then it's used for this purpose. */
-    keyScope?: any;
+    // /** This is used for spread functions.
+    //  * - Because they are spread out, we need to distinguish their defs from main render scope.
+    //  * - Preferably the are distinguished from other spreads, too, but it's technically difficult.
+    //  *   .. However, if gives a key to the spread function (when uses it), then it's used for this purpose. */
+    // keyScope?: any;
     key?: any;
     attachedRefs?: UIRef[];
     attachedContexts?: Record<string, UIContext | null>;
@@ -433,6 +432,9 @@ interface UIDefBase<Props extends UIGenericPostProps = UIGenericPostProps> {
     // Others - only for specific types.
     // .. Fragment.
     isArray?: boolean;
+    withContent?: boolean;
+    scopeType?: "spread" | "spread-pass" | "spread-copy";
+    scopeMap?: Map<UIDefKeyTag, UIDefApplied[]>;
     // .. Content.
     domContent?: UIContentSimple | null;
     domHtmlMode?: boolean;
@@ -494,8 +496,14 @@ export interface UIDefBoundary<Props extends UIGenericPostProps = UIGenericPostP
 export interface UIDefFragment extends UIDefBase {
     _uiDefType: "fragment";
     tag: null;
-    withContent?: boolean;
     isArray?: boolean;
+    withContent?: boolean;
+    scopeType?: "spread" | "spread-pass" | "spread-copy";
+    /** Scope map is used only on the applied def side.
+     * - This is used to isolate the scopes for the pairing process.
+     * - For example, any spread function outputs, and any content pass copies in them, should be isolated.
+     * - This means, that when the root of the isolation is paired with a new target, the inner pairing will use this scope only - and nothing else can use it. */
+    scopeMap?: Map<UIDefKeyTag, UIDefApplied[]>;
 }
 export interface UIDefPass extends UIDefBase {
     _uiDefType: "pass";
@@ -616,8 +624,8 @@ interface UIDefPseudo {
     props?: Dictionary | UIGenericPostProps;
     domElement?: HTMLElement | SVGElement | null;
 }
-export interface UIDefAppliedPseudo extends UIDefPseudo { childDefs: UIDefApplied[]; };
-export interface UIDefTargetPseudo extends UIDefPseudo { childDefs: UIDefTarget[]; };
+export interface UIDefAppliedPseudo extends UIDefPseudo { childDefs: UIDefApplied[]; scopeType?: UIDefFragment["scopeType"]; scopeMap?: UIDefFragment["scopeMap"]; };
+export interface UIDefTargetPseudo extends UIDefPseudo { childDefs: UIDefTarget[]; scopeType?: UIDefFragment["scopeType"]; scopeMap?: UIDefFragment["scopeMap"]; };
 
 
 // - Content envelope - //
@@ -633,9 +641,9 @@ export interface UIContentEnvelope {
 /** The basic dom node cloning modes - either deep or shallow: element.clone(mode === "deep").
  * - If in "always" then is deep, and will never use the original. */
 export type UICloneNodeBehaviour = "deep" | "shallow" | "always";
-export type RenderTextTagCallback = (text: string | number) => Node | null;
-export type RenderTextContentCallback = (text: string | number) => string | number;
-export type RenderTextTag = keyof HTMLElementTagNameMap | "" | RenderTextTagCallback;
+export type UIRenderTextTagCallback = (text: string | number) => Node | null;
+export type UIRenderTextContentCallback = (text: string | number) => string | number;
+export type UIRenderTextTag = keyof HTMLElementTagNameMap | "" | UIRenderTextTagCallback;
 export interface UIHostSettingsUpdate extends Partial<Omit<UIHostSettings, "updateLiveModes">> {
     updateLiveModes?: Partial<UIHostSettings["updateLiveModes"]>;
 }
@@ -662,18 +670,18 @@ export interface UIHostSettings {
 
     /** If is null, then is synchronous. Otherwise uses the given timeout in ms. Defaults to 0ms.
      * - This timeout delays the actual dom rendering part of the component update process.
-     *   * It's useful to have a tiny delay to save from unnecessary rendering, when update gets called multiple times - even 0ms can help.
-     *   * Only use null renderTimeout (= synchronous rendering after updateTimeout) if you really want rendering to happen immediately after update.
-     *     .. Typically, you then also want the updateTimeout to be null (synchronous), so you get access to your dom elements synchronously.
-     * - Note that renderTimeout happens after updateTimeou, so they both affect how fast rendering happens - see settings.updateTimeout for details. */
+     * - It's useful to have a tiny delay to save from unnecessary rendering, when update gets called multiple times - even 0ms can help.
+     * - Only use null renderTimeout (= synchronous rendering after updateTimeout) if you really want rendering to happen immediately after update.
+     *     * Typically, you then also want the updateTimeout to be null (synchronous), so you get access to your dom elements synchronously.
+     * - Note that renderTimeout happens after updateTimeout, so they both affect how fast rendering happens - see settings.updateTimeout for details. */
     renderTimeout: number | null;
 
     /** The uiDid-calls are collected (together with render infos) and called after the recursive update process has finished.
      * - This option controls whether the calls are made immediately after the update process or only after the (potentially delayed) rendering.
      * - Keep this as false, if you want the components to have their dom elements available upon uiDidMount - like in React. (Defaults to false.)
      * - Put this to true, only if you really want the calls to be executed before the rendering happens.
-     * .. If you combine this with updateTimeout: null, then you get synchronously updated state, with only rendering delayed.
-     * .. However, you won't have dom elements on mount. To know when that happens should use refs and .domRefDidMount and .domRefWillUnmount callbacks. */
+     *     * If you combine this with updateTimeout: null, then you get synchronously updated state, with only rendering delayed.
+     *     * However, you won't have dom elements on mount. To know when that happens should use refs and .domDidMount and .domWillUnmount callbacks. */
     uiDidImmediateCalls: boolean;
 
     /** Whether should call .domRefDidMove in the case, that didn't need to actually move the element, although index was changed. */
@@ -682,7 +690,7 @@ export interface UIHostSettings {
     /** If the internal should update check is called without any types to update with, this decides whether should update or not. Defaults to false. */
     shouldUpdateWithNothing: boolean;
 
-    /** Defines what components should look at when doing uiShouldUpdate check.
+    /** Defines what UILive components should look at when doing uiShouldUpdate check.
      * By default looks in all 4 places for change: 1. Props, 2. State, 3. Context, 4. Children.
      * .. However, most of them will be empty, and Context and Children will only be there if specifically asked for by needsChildren or needsData. */
     updateLiveModes: UIUpdateCompareModesBy;
@@ -700,7 +708,7 @@ export interface UIHostSettings {
      * .. In terms of assumed performance:
      * .... Even though equalDomProps is an extra process, it's a bit faster to run than collecting diffs and in addition it can stop short - never add render info.
      * .... However, the only time it stops short is for not-equal, in which case it also means that we will anyway do the diff collection run later on.
-     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is "if-needed". */
+     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is true. */
     preEqualCheckDomProps: boolean | "if-needed";
 
     /** The maximum number of times a boundary is allowed to be render during an update due to update calls during the render func.
@@ -711,12 +719,14 @@ export interface UIHostSettings {
     /** Which element (tag) to wrap texts (from props.children) into.
      * - By default, no wrapping is applied: treats texts as textNodes (instanceof Node).
      * - You can also pass in a callback to do custom rendering - should return a Node, or then falls back to textNode. */
-    renderTextTag: RenderTextTag;
+    renderTextTag: UIRenderTextTag;
 
-    renderInnerHtmlTag: keyof HTMLElementTagNameMap;
+    /** Tag to use for as a fallback when using the uiDom.htmlDef feature (that uses .innerHTML on a dummy element). Defaults to "span".
+     * - It only has meaning, if the output contains multiple elements and didn't specifically define the container tag to use. */
+    renderHtmlDefTag: keyof HTMLElementTagNameMap;
 
     /** If you want to process the simple content text, assign a callback here. */
-    renderTextContent: RenderTextContentCallback | null;
+    renderTextContent: UIRenderTextContentCallback | null;
 
     /** This defines how UIDom will treat "simple content". The options are:
      *     1. When set to false (default), renders everything except null and undefined. (Other values are stringified.)
@@ -731,9 +741,9 @@ export interface UIHostSettings {
 
     /** For svg content, the namespaceURI argument to be passed into createElementNS(namespaceURI, tag).
      * If none given, hard coded default is: "http://www.w3.org/2000/svg" */
-    renderSvgNamespaceUri: string;
+    renderSvgNamespaceURI: string;
 
-    /** When using uiDom.Element to insert nodes, and swaps them, whether should apply, and if so read first.
+    /** When using uiDom.Element to insert nodes, and swaps them, whether should apply (true), and if so whether should read first ("read").
      * Defaults to true, which means will apply based on scratch, but not read before it. */
     renderDomPropsOnSwap: boolean | "read";
 
@@ -744,7 +754,7 @@ export interface UIHostSettings {
 
     /** Whether allows contexts to cascade down from host to host.
      * - Specifically sets whether this host accepts contexts above its root.
-     * - If false, will be independent of the parent host's contexts. (Defaults to true.) */
+     * - If false, will be independent of the parent host's contexts. Defaults to true. */
     welcomeContextsUpRoot: boolean;
 
     /** When pairing defs for reusing, any arrays are dealt as if their own key scope by default.
@@ -757,7 +767,7 @@ export interface UIHostSettings {
      * - Put to `true` to reuse both boundaries and dom elements. This is default and recommended if you don't care about having a fresh lifecycle for similar boundaries.
      * - Put to `false` to never reuse if no key defined. (Not recommended.)
      * - Put to `dom` to reuse only for dom, while all boundaries get a new life cycle.
-     * - Put to `dom-mini` to reuse for dom and mini renderers, while all class and live boundaries get a new life cycle. This is recommended as 2nd option. */
+     * - Put to `dom-mini` to reuse for dom and mini renderers, while all class and live boundaries get a new life cycle. */
     reuseSiblingTags: boolean | "dom" | "dom-mini";
 
     /** For weird behaviour. */
@@ -773,7 +783,7 @@ export interface UIHostSettings {
      * - The detection is uiHost based and simply based on whether the element to create was already grounded or not. */
     duplicateDomNodeBehaviour: UICloneNodeBehaviour | "";
     /** Custom handler for the duplicateDomNode behaviour. */
-    duplicateDomNodeHandler: ((domElement: Node, treeNode: UITreeNodeDom) => Node | null) | null;
+    duplicateDomNodeHandler: ((domNode: Node, treeNode: UITreeNodeDom) => Node | null) | null;
 
 }
 

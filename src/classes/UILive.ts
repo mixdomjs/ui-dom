@@ -26,7 +26,7 @@ import {
     UIContextData,
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
-import { _Apply } from "../static/_Apply";
+import { _Find } from "../static/_Find";
 import { UILiveSource, UISourceBoundary } from "./UIBoundary";
 import { uiDom } from "../uiDom";
 import { UIWiredType } from "./UIWired";
@@ -50,53 +50,55 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         public remote: Remote;
 
         // Internal but public.
-        public readonly wired: Set<UIWiredType> | null;
-        public readonly boundary: UILiveSource<AllContexts>;
+        public readonly uiWired: Set<UIWiredType> | null;
+        public readonly uiBoundary: UILiveSource<AllContexts>; // Set externally right after constructor.
 
         public updateModes: Partial<UIUpdateCompareModesBy>;
 
-        // Private-like.
-        _timers?: Map<any, number>;
+        // Semi-public.
+        timers?: Map<any, number>;
 
 
         // - Init & Destroy - //
 
-        constructor(props: Props, boundary?: UILiveSource<AllContexts, Remote>, ...args: any[]) {
+        constructor(props: Props, boundary?: UISourceBoundary, ...args: any[]) {
             // Call.
             super(...args);
-            // Boundary should always be given - we just use this for more fluent TSX support.
-            if (boundary)
-                this.boundary = boundary;
+            // If the boundary was passed by the extending class, set it. Otherwise will be set right after.
+            if (boundary) {
+                this.uiBoundary = boundary as UILiveSource;
+                boundary.live = this as UILive;
+            }
             // Init.
+            this.uiWired = null;
             this.props = props;
             this.updateModes = {};
-            this.wired = null;
             // Note.
-            // - _timers will be assigned if used.
+            // - timers will be assigned if used.
             // - If used, State is applied extenrally - by the extending class or on the initializing closure for functional.
             // - If sets needs for context data, Remote is built before rendering (or immediately if on the initializing closure for functional).
-            // - The .boundary is applied externally right after. We just want to keep the constructor very React like.
+            // - The .uiBoundary is applied externally right after. We just want to keep the constructor very React like.
         }
 
 
         // - Updating - //
 
         public update(forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
-            this.boundary.uiHost.services.absorbUpdates(this.boundary, { force: forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
+            this.uiBoundary.uiHost.services.absorbUpdates(this.uiBoundary, { force: forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
         }
 
         public setState(newState: Pick<State, keyof State> | State, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
             // Combine state.
             const state = { ...this.state, ...newState } as State;
             // Update.
-            this.boundary.updateBy({ state }, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
+            this.uiBoundary.updateBy({ state }, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
         }
 
         public setInState(property: keyof State, value: any, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
             // Get new state.
             const state = { ...(this.state || {}), [property]: value } as State;
             // Update.
-            this.boundary.updateBy({ state }, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
+            this.uiBoundary.updateBy({ state }, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
         }
 
 
@@ -104,12 +106,12 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         public addTimer(timerId: any, callback: () => void, timeout: number, bindThis: boolean = true): void {
             // Clear old.
-            if (!this._timers)
-                this._timers = new Map();
-            else if (this._timers.has(timerId))
+            if (!this.timers)
+                this.timers = new Map();
+            else if (this.timers.has(timerId))
                 this.clearTimer(timerId);
             // Assign.
-            this._timers.set(timerId, window.setTimeout(() => {
+            this.timers.set(timerId, window.setTimeout(() => {
                 this.clearTimer(timerId);
                 if (bindThis)
                     callback.call(this);
@@ -118,27 +120,27 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             }, timeout));
         }
         public hasTimer(timerId: any): boolean {
-            return this._timers ? this._timers.has(timerId) : false;
+            return this.timers ? this.timers.has(timerId) : false;
         }
         public clearTimer(timerId: any): void {
-            if (!this._timers)
+            if (!this.timers)
                 return;
-            const timer = this._timers.get(timerId);
+            const timer = this.timers.get(timerId);
             if (timer != null) {
                 window.clearTimeout(timer);
-                this._timers.delete(timerId);
+                this.timers.delete(timerId);
             }
         }
         public clearTimers(onlyTimerIds: any[]): void {
-            if (!this._timers)
+            if (!this.timers)
                 return;
             if (onlyTimerIds) {
                 for (const timerId of onlyTimerIds)
                     this.clearTimer(timerId);
             }
             else {
-                this._timers.forEach(timer => window.clearTimeout(timer));
-                this._timers.clear();
+                this.timers.forEach(timer => window.clearTimeout(timer));
+                this.timers.clear();
             }
         }
 
@@ -146,27 +148,27 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         // - Getters - //
 
         public isMounted(): boolean {
-            return this.boundary.isMounted === true;
+            return this.uiBoundary.isMounted === true;
         }
 
         public queryDomElement(selector: string, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false): Element | null {
-            return _Apply.queryDomElement(this.boundary.baseTreeNode, selector, allowWithinBoundaries, allowOverHosts);
+            return _Find.domElementByQuery(this.uiBoundary.treeNode, selector, allowWithinBoundaries, allowOverHosts);
         }
 
         public queryDomElements(selector: string, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false): Element[] {
-            return _Apply.queryDomElements(this.boundary.baseTreeNode, selector, maxCount, allowWithinBoundaries, allowOverHosts);
+            return _Find.domElementsByQuery(this.uiBoundary.treeNode, selector, maxCount, allowWithinBoundaries, allowOverHosts);
         }
 
         public findDomNodes(maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Node[] {
-            return _Apply.findTreeNodesWithin(this.boundary.baseTreeNode, { dom: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.domNode) as Node[];
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { dom: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.domNode) as Node[];
         }
 
         public findBoundaries(maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] {
-            return _Apply.findTreeNodesWithin(this.boundary.baseTreeNode, { boundary: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { boundary: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
         }
 
         public findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
-            return _Apply.findTreeNodesWithin(this.boundary.baseTreeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator);
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator);
         }
 
 
@@ -179,14 +181,14 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
          *   .. Only use .getChildren() if you really need it. For example, to wrap each individually or read info from their defs.
          */
         public getChildren(skipNeeds: boolean = false, shallowCopy: boolean = true): Readonly<UIDefTarget[]> {
-            return this.boundary.contentApi && this.boundary.contentApi.getChildren(skipNeeds, shallowCopy) || [];
+            return this.uiBoundary.contentApi && this.uiBoundary.contentApi.getChildren(skipNeeds, shallowCopy) || [];
         }
 
         /** Define for the remaining lifecycle if should update when content closure updates.
          * - If boolean given it forces the mode.
          * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
         public needsChildren(needs?: boolean | "temp" | null): void {
-            this.boundary.contentApi && this.boundary.contentApi.needsChildren(needs);
+            this.uiBoundary.contentApi && this.uiBoundary.contentApi.needsChildren(needs);
         }
 
 
@@ -195,57 +197,57 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         // Needs in contexts (data and actions).
 
         public needsData(contextName: AllContexts & string, needs?: boolean | any | any[], refresh?: boolean): boolean {
-            return this.boundary.contextApi.needsData(contextName, needs, refresh);
+            return this.uiBoundary.contextApi.needsData(contextName, needs, refresh);
         }
 
         public needsDataBy(namedNeeds: Record<keyof AllContexts & string, boolean | string | string[]>, extend?: boolean, refresh?: boolean): boolean {
-            return this.boundary.contextApi.needsDataBy(namedNeeds, extend, refresh);
+            return this.uiBoundary.contextApi.needsDataBy(namedNeeds, extend, refresh);
         }
 
         public needsAction(contextName: AllContexts & string, actionType: string, needs?: boolean): void {
-            this.boundary.contextApi.needsAction(contextName, actionType, needs);
+            this.uiBoundary.contextApi.needsAction(contextName, actionType, needs);
         }
 
         public needsActions(contextName: AllContexts & string, actionTypes: boolean | string[] = [], extend?: boolean): void {
-            this.boundary.contextApi.needsActions(contextName, actionTypes as string[] | boolean, extend);
+            this.uiBoundary.contextApi.needsActions(contextName, actionTypes as string[] | boolean, extend);
         }
 
         public needsActionsBy(namedNeeds: Record<keyof AllContexts & string, boolean | string[]>, extendWithinContext?: boolean, extendForAll?: boolean): void {
-            this.boundary.contextApi.needsActionsBy(namedNeeds, extendWithinContext, extendForAll);
+            this.uiBoundary.contextApi.needsActionsBy(namedNeeds, extendWithinContext, extendForAll);
         }
 
         // Do stuff with context data.
 
         public setData(contextName: keyof AllContexts & string, data: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             if (context)
                 context.setData(data, extend, refresh, forceTimeout);
         }
 
         public setInData(contextName: keyof AllContexts & string, dataKey: string, data: any, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             if (context)
                 context.setInData(dataKey, data as never, extend, refresh, forceTimeout);
         }
 
         public getData(contextName: keyof AllContexts & string, noContextFallback: any = undefined): any {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             return context ? context.data : noContextFallback;
         }
 
         public getInData(contextName: keyof AllContexts & string, dataKey: string, noContextFallback: any = undefined): any {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             return context ? context.getInData(dataKey as never) : noContextFallback;
         }
 
         public refreshData(contextName: keyof AllContexts & string, refreshKeys?: boolean | string | string[], forceTimeout?: number | null): void {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             if (context)
                 context.refresh(refreshKeys as never, forceTimeout);
         }
 
         public refreshDataBy(namedNeeds: Record<keyof AllContexts & string, boolean | string | string[]>, forceTimeout?: number | null): void {
-            const contexts = this.boundary.contextApi.getContexts(namedNeeds);
+            const contexts = this.uiBoundary.contextApi.getContexts(namedNeeds);
             for (const name in contexts) {
                 const context = contexts[name];
                 if (context)
@@ -257,33 +259,33 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         // Do stuff with context actions.
 
         public sendAction(contextName: keyof AllContexts & string, action: UIActions & { value?: never; }, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             if (context)
                 context.sendAction(action, asAction, forceTimeout);
         }
 
         public sendActionWith(contextName: keyof AllContexts & string, actionType: string, payload: any, asAction?: "post" | "quick" | "", forceTimeout?: number | null): void {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             if (context)
                 context.sendAction({ type: actionType, payload } as UIActions & { value?: never; }, asAction, forceTimeout);
         }
 
         public askQuestion(contextName: keyof AllContexts & string, question: UIActions & UIQuestion, defaultValue?: any): any {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             return context ? context.askQuestion(question, defaultValue) : (defaultValue === undefined ? question.value : defaultValue);
         }
         public askQuestionWith(contextName: keyof AllContexts & string, type: string, payload: any, defaultValue?: any, maxAnswers: number = 0): any {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             return context ? context.askQuestion({ type, payload, value: defaultValue } as UIActions & UIQuestion, maxAnswers) : [];
         }
 
         public askQuestionary(contextName: keyof AllContexts & string, question: UIActions & UIQuestionary, maxAnswers: number = 0): any[] {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             return context ? context.askQuestionary(question, maxAnswers) : (question as UIQuestionary).values || [];
         }
 
         public askQuestionaryWith(contextName: keyof AllContexts & string, type: string, payload: any, maxAnswers: number = 0): any[] {
-            const context = this.boundary.contextApi.getContext(contextName);
+            const context = this.uiBoundary.contextApi.getContext(contextName);
             return context ? context.askQuestionary({ type, payload, values: [] } as UIActions & UIQuestionary, maxAnswers) : [];
         }
 
@@ -291,36 +293,36 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
         // - Mangle contexts - //
 
         public hasContext(name: keyof AllContexts & string, onlyTypes: UIContextAttach = UIContextAttach.All): boolean {
-            return !!this.boundary.contextApi.getContext(name, onlyTypes);
+            return !!this.uiBoundary.contextApi.getContext(name, onlyTypes);
         }
 
         public getContext(name: keyof AllContexts & string, onlyTypes: UIContextAttach = UIContextAttach.All): UIContext | null | undefined {
-            return this.boundary.contextApi.getContext(name, onlyTypes) as UIContext | null | undefined;
+            return this.uiBoundary.contextApi.getContext(name, onlyTypes) as UIContext | null | undefined;
         }
 
         public getContexts(onlyNames?: RecordableType<keyof AllContexts & string> | null, onlyTypes?: UIContextAttach): Partial<Record<string, UIContext | null>> {
-            return this.boundary.contextApi.getContexts(onlyNames, onlyTypes);
+            return this.uiBoundary.contextApi.getContexts(onlyNames, onlyTypes);
         }
 
         public overrideContext(name: string, context: UIContext | null | undefined, refresh: boolean = true): void {
-            this.boundary.contextApi.overrideContext(name, context, refresh);
+            this.uiBoundary.contextApi.overrideContext(name, context, refresh);
         }
 
         public overrideContexts(tunnels: Record<string, UIContext | null | undefined>, refresh: boolean = true): void {
-            this.boundary.contextApi.overrideContexts(tunnels, refresh);
+            this.uiBoundary.contextApi.overrideContexts(tunnels, refresh);
         }
 
         public createContext(data: any, overrideWithName?: string, refreshIfOverriden: boolean = true): UIContext {
             const context = uiDom.createContext(data);
             if (overrideWithName)
-                this.boundary.contextApi.overrideContext(overrideWithName, context, refreshIfOverriden);
+                this.uiBoundary.contextApi.overrideContext(overrideWithName, context, refreshIfOverriden);
             return context;
         }
 
         public createContexts(allData: any, overrideForSelf: boolean = false, refreshIfOverriden: boolean = true): Record<string, UIContext> {
             const contexts = uiDom.createContexts(allData);
             if (overrideForSelf)
-                this.boundary.contextApi.overrideContexts(contexts, refreshIfOverriden);
+                this.uiBoundary.contextApi.overrideContexts(contexts, refreshIfOverriden);
             return contexts;
         }
 
@@ -329,11 +331,11 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         public createWired(func: UIComponent, builder: (...params: any[]) => Dictionary, mixer: (baseProps: Dictionary, addsProps: Dictionary, ...params: any[]) => Dictionary, ...params: any[]): UIWiredType {
             const Wired = uiDom.createWired(func, builder, mixer, ...params);
-            if (!this.wired)
+            if (!this.uiWired)
                 // We set a readonly value here - it's on purpose: we want it to be readonly for all others except this line.
-                (this as { wired: Set<UIWiredType>; }).wired = new Set([Wired]);
+                (this as { uiWired: Set<UIWiredType>; }).uiWired = new Set([Wired]);
             else
-                this.wired.add(Wired);
+                this.uiWired.add(Wired);
             return Wired;
         }
 
@@ -347,10 +349,6 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
     }
 }
 
-/** Shortcut to go actions first. Useful for those components that rely mostly (or only) on actions and data. */
-export interface UILiveBy<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}>
-    extends UILive<Props, State, Remote, AllContexts> {}
-
 // Using an interface with the same name as the class solves the <T> problem with mixins.
 export interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
 
@@ -363,15 +361,15 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     remote: Remote;
 
     // Wired.
-    readonly wired: Set<UIWiredType> | null;
+    readonly uiWired: Set<UIWiredType> | null;
 
     /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
-    readonly boundary: UILiveSource;
+    readonly uiBoundary: UILiveSource;
     /** If any is undefined / null, then uses the default from uiHost.settings. */
     updateModes: Partial<UIUpdateCompareModesBy>;
 
-    // Private.
-    _timers?: Map<any, number>;
+    // Semi-public.
+    timers?: Map<any, number>;
 
 
     // - Updating - //
@@ -590,10 +588,19 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 // .. We don't really need the declaration for this class. Can it be avoided somehow?
 export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
     // We need a constructor here for typescript TSX.
-    constructor(props: Props, boundary?: UILiveSource<AllContexts, Remote>, ...args: any[]) {
-        super(props, boundary, ...args);
+    constructor(props: Props, ...args: any[]) {
+        super(props, ...args);
     }
 }
+
+// /** Shortcut class to go actions first. Useful for those components that rely mostly (or only) on actions and data. */
+// export class UILiveBy<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}>
+//     extends UILive<Props, State, Remote, AllContexts> {}
+
+/** Shortcut typing to go actions first. Useful for those components that rely mostly (or only) on actions and data. */
+export interface UILiveBy<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}>
+    extends UILive<Props, State, Remote, AllContexts> {}
+
 /** Create a UILive functional component. */
 export const createLive = <
     Props extends Dictionary = {},

@@ -12,7 +12,6 @@ import {
     UIUpdateCompareMode,
 } from "../static/_Types";
 import { uiDom } from "../uiDom";
-import { UIMiniSource } from "./UIBoundary";
 
 function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
@@ -29,18 +28,12 @@ function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
         // - Methods - //
 
-        constructor(props: Props, boundary?: UIMiniSource, updateMode: UIUpdateCompareMode | null = null, ...passArgs: any[]) {
+        constructor(props: Props, updateMode: UIUpdateCompareMode | null = null, ...passArgs: any[]) {
             // We are a mixin.
             super(...passArgs);
             // Set from args.
             this.props = props;
             this.updateMode = updateMode;
-            // Assign encapsulated by boundary.
-            if (boundary) {
-                this.isMounted = (): boolean => boundary.isMounted === true;
-                this.getChildren = boundary.contentApi.getChildren.bind(boundary.contentApi);
-                this.needsChildren = boundary.contentApi.needsChildren.bind(boundary.contentApi);
-            }
         }
         public setUpdateMode(updateMode: UIUpdateCompareMode | null): void {
             this.updateMode = updateMode;

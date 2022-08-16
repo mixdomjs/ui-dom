@@ -21,19 +21,19 @@ import { UIContext } from "./UIContext";
 
 export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData extends Dictionary = {}> {
 
-    boundary: UILiveSource<AllContexts, ContextData>;
+    public uiBoundary: UILiveSource<AllContexts, ContextData>;
 
-    contextNeeds: Map<string, string[] | boolean>;
-    actionNeeds: Map<string, Set<string> | boolean>;
+    public contextNeeds: Map<string, string[] | boolean>;
+    public actionNeeds: Map<string, Set<string> | boolean>;
 
     /** The contexts the component has overridden itself.
      * .. This is typically used for tunneling purposes, when the component wants to be part of the context it created.
      * .. This is optional because, it's quite rarely used.
      * .... But when using contexts for tunneling, sometimes wants to talkback to parent with actions or share part of the context. */
-    overriddenContexts?: Record<string, UIContext | null>;
+    public overriddenContexts?: Record<string, UIContext | null>;
 
     constructor(boundary: UILiveSource<AllContexts, ContextData>) {
-        this.boundary = boundary;
+        this.uiBoundary = boundary;
         this.actionNeeds = new Map();
         this.contextNeeds = new Map();
     }
@@ -54,7 +54,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
             myNeeds ? myNeeds.add(actionType) : this.actionNeeds.set(contextName, new Set([actionType]));
             // Context.
             if (ctx)
-                ctx.services.onInterest("actions", this.boundary, contextName);
+                ctx.services.onInterest("actions", this.uiBoundary, contextName);
         }
         // Remove need.
         else if (myNeeds && myNeeds.has(actionType)) {
@@ -64,7 +64,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
                 this.actionNeeds.delete(contextName);
                 // Context.
                 if (ctx)
-                    ctx.services.onDisInterest("actions", this.boundary, contextName);
+                    ctx.services.onDisInterest("actions", this.uiBoundary, contextName);
             }
         }
     }
@@ -97,7 +97,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         if (!actionTypes !== !myNeeds) {
             const ctx = this.getContext(contextName);
             if (ctx)
-                actionTypes ? ctx.services.onInterest("actions", this.boundary, contextName) : ctx.services.onDisInterest("actions", this.boundary, contextName);
+                actionTypes ? ctx.services.onInterest("actions", this.uiBoundary, contextName) : ctx.services.onDisInterest("actions", this.uiBoundary, contextName);
         }
     }
 
@@ -107,7 +107,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
     needsActionsBy(namedNeeds: Record<keyof AllContexts & string, boolean | string[]>, extendWithinContext?: boolean, extendForAll: boolean = true) {
         // If false, then removes action needs from all other contexts.
         if (!extendForAll) {
-            const needsWere = this.boundary.contextApi.actionNeeds;
+            const needsWere = this.uiBoundary.contextApi.actionNeeds;
             // Loop each and if not found in the new set, remove.
             for (const name of needsWere.keys())
                 if (namedNeeds[name] === undefined)
@@ -115,7 +115,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         }
         // Set for each given.
         for (const name in namedNeeds)
-            this.boundary.contextApi.needsActions(name, namedNeeds[name], extendWithinContext);
+            this.uiBoundary.contextApi.needsActions(name, namedNeeds[name], extendWithinContext);
     }
 
 
@@ -135,7 +135,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         // Update context collection.
         const ctx = this.getContext(name) || null;
         if (ctx)
-            needs ? ctx.services.onInterest("data", this.boundary, name) : ctx.services.onDisInterest("data", this.boundary, name);
+            needs ? ctx.services.onInterest("data", this.uiBoundary, name) : ctx.services.onDisInterest("data", this.uiBoundary, name);
         // Refresh.
         if (refreshIfChanged)
             this.updateRemote();
@@ -188,7 +188,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
             overridden[name] = context;
         }
         // Did change.
-        const didChange: UIContextRefresh = oldContext !== newContext ? _Apply.helpUpdateContext(this.boundary, name, newContext || null, oldContext || null) : 0;
+        const didChange: UIContextRefresh = oldContext !== newContext ? _Apply.helpUpdateContext(this.uiBoundary, name, newContext || null, oldContext || null) : 0;
         // Refresh.
         if (refresh && _Apply.shouldUpdateContextually(didChange))
             this.updateRemote();
@@ -218,13 +218,13 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         }
         // Attached by tunneling.
         if (onlyTypes & UIContextAttach.Parent) {
-            const tunnels = this.boundary._outerDef.attachedContexts;
+            const tunnels = this.uiBoundary._outerDef.attachedContexts;
             if (tunnels && tunnels[name] !== undefined)
                 return tunnels[name];
         }
         // From outer contexts.
         if (onlyTypes & UIContextAttach.Cascading)
-            return this.boundary.outerContexts[name];
+            return this.uiBoundary.outerContexts[name];
         // Not found.
         return undefined;
     }
@@ -235,12 +235,12 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         const okNames = onlyNames ? _Lib.buildRecordable(onlyNames) : null;
         const tunnels: Record<string, UIContext | null> = {};
         if (onlyTypes & UIContextAttach.Cascading)
-            for (const name in this.boundary.outerContexts)
+            for (const name in this.uiBoundary.outerContexts)
                 if (!okNames || okNames[name])
-                    tunnels[name] = this.boundary.outerContexts[name];
+                    tunnels[name] = this.uiBoundary.outerContexts[name];
         // Attached.
         if (onlyTypes & UIContextAttach.Parent) {
-            const attached = this.boundary._outerDef.attachedContexts;
+            const attached = this.uiBoundary._outerDef.attachedContexts;
             if (attached)
                 for (const name in attached)
                     if (!okNames || okNames[name])
@@ -260,21 +260,21 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
 
     public updateRemote(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
         // On mount run, allow to build the context immediately.
-        if (!this.boundary.isMounted) {
+        if (!this.uiBoundary.isMounted) {
             if (this.contextNeeds.size)
                 this.rebuildRemote();
         }
         // Add to updates.
         else
-            this.boundary.uiHost.services.absorbUpdates(this.boundary, { contextual: true }, forceUpdateTimeout, forceRenderTimeout);
+            this.uiBoundary.uiHost.services.absorbUpdates(this.uiBoundary, { contextual: true }, forceUpdateTimeout, forceRenderTimeout);
     }
 
     public rebuildRemote(): void {
         // Prepare updating.
         const data: Dictionary = {};
         const ctxs: Record<string, UIContext | null> = {};
-        const overridden = this.boundary.contextApi.overriddenContexts;
-        const tunnels = this.boundary._outerDef.attachedContexts;
+        const overridden = this.uiBoundary.contextApi.overriddenContexts;
+        const tunnels = this.uiBoundary._outerDef.attachedContexts;
         // Loop the needs.
         for (const name of this.contextNeeds.keys()) {
             // Get context.
@@ -282,13 +282,13 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
             if (tunnels && ctx === undefined)
                 ctx = tunnels[name];
             if (ctx === undefined)
-                ctx = this.boundary.outerContexts[name];
+                ctx = this.uiBoundary.outerContexts[name];
             // Assign for callback.
             ctxs[name] = ctx || null;
             data[name] = ctx ? ctx.data : null;
         }
         // Rebuild.
-        const live = this.boundary.live;
+        const live = this.uiBoundary.live;
         if (live.buildRemote)
             live.remote = live.buildRemote(data as UIAllContextsDataWithNull<AllContexts>, ctxs as UIAllContextsWithNull<AllContexts>);
     }

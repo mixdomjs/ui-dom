@@ -1,4 +1,55 @@
+## v2.2.0
+
+### Additions
+
+- Added static methods on the `uiDom` shortcut object for finding stuff by a given `UITreeNode`.
+- Added optional `(lastValue, newValue)` params to the effect mount callback in `UIEffect`. Likewise modified the unmount callback but also added 3rd argument: `(lastValue, newValue, why)`that is either `"use"` or `"cancel"`.
+
+### Optimizations
+
+- Optimized a special case to not trigger re-checking update if already decided there's no need for updates. Only affected swapping cascading contexts on / off while a component's  `remote` still returned similar / same data due to fallback. Then would again ask if should update - which is pointless logically, as it was just decided not to: why would the answer be different with same inputs (if used correctly).
+
+### Fixes
+
+- Fixed a special case bug related to `UISpreadFunction`s and content passing. To fix it, reorganized the whole idea about how sub scopes works in pairing. Now the support is actually better than before: each spread has its own scope, so after the root of the spread is matched, the sub pairing happens in its own isolated scope (+ handling feeding back to parent scope the true content pass). So it's not shared scope for all spreads like before (unless gave a key). This was a known limitation, but it now got solved as well.
+- Fixed that swapping cascading contexts off didn't take effect properly anymore.
+- Finalized the support for declaring context needs on the constructor when using class form of `UILive` (it wasn't fully fixed on v2.1.0). Now, if wants to do so in the constructor, needs to call super with the 2nd argument, too: `super(props, boundary);` - otherwise can call `super(props)`. In either case, after the constructor makes sure that `.uiBoundary` is set.
+
+### Renaming  (public)
+
+- Changed that `UIMini` and `UIWired` that class constructor does not require `(props, boundary)` but just `(props)` for fluency. 
+- Likewise for `UILive`, except that the boundary is still added there as the second argument, in case wants to do contextual stuff on the constructor call. In that case can pass it to the `super(props, boundary)` - if does not pass it and just calls `super(props)`, then will be assigned right after. This is to allow more easy and fluent usage.
+  - Note. This was the easiest solution to support declaring contextual needs in the constructor without adding a `.uiBoundary` checks to each related `UILive` method. They would be quite annoying since the `.uiBoundary` is actually always there - except in this one particular case (in constructor if doesn't pass boundary to super).
+- Changed `boundary` class member to `uiBoundary` in `UILive` and `UIContextApi` - to be similar how class members referring to internal class instances are named elsewhere: `uiHost`, `uiBoundary`, `uiRender`, `uiContext`, ... (Of course `services` is like it is for brevity - eg. `uiContextServices` or `uiHostServices` are unnecessarily long.)
+- Likewise renamed `.wired` collection member to be `.uiWired` in `UILive`.
+- Likewise renamed `boundaries` to `uiBoundaries` in `UIWired` static class usage.
+- Changed semi private `_timers?` to `timers?` in `UILive`.
+- Changed the setting `renderSvgNamespaceUri` to `renderSvgNamespaceURI` in `UIHost` settings, and `renderInnerHtmlTag` setting to `renderHtmlDefTag`.
+
+### Dev changes 
+
+- Made `findTreeNodes` method's first argument be optional on `UIHost`. Likewise in the core method `_Find.treeNodesWithin`, the types are optional.
+- Moved `targetDef` and temporary `_isDisabled?` to the services side - as they are very private like. Along with them moved root boundary handling inner codes to the services side.
+- Renamed `.baseTreeNode` on `UIBoundary` to `.treeNode`.
+- Clarified that `_Apply` only contains static methods related to the update flow.
+  - Created `_Find` static script and moved the finding methods from `_Apply` there.
+  - Moved `refreshWithTimeout` method to `_Lib` static script from `_Apply`.
+
+- Removed unused methods and refined naming.
+  - Renamed the internal `_Apply.getTreeNodesForDomRootsUnder` to `_Find.rootDomTreeNodes` (for brevity) and made it be used all around internally instead of `boundary.getTreeNodesForDomRoots` (which will call it anyway).
+  - Removed `getAllDomNodes` method from `UIBaseBoundary` for two reasons: 1. it had been unused (and a bit hidden inside the boundary), 2. there are similar methods elsewhere - should respect the same internal details.
+  - Also removed all other getter methods from `UIBaseBoundary`, because after above, all were unused. (Of course, they were originally provided there for custom usage, but it's presumably very rare to mangle with boundaries - so if goes that far, can use the static methods in `uiDom` shortcut object if really in deed needs those features.)
+
+- Changed the return  value from `boolean`  to `void` in the static `UIHost.modifySettings` function. (It was a bit misleading and anyway unused, and quite useless.)
+- Some minor type renaming inside `UIHostSettings`.
+
+---
+
 ## v2.1.1
+
+### Optimization
+
+- Tiny optimization on the library `areEqual` method.
 
 ### Package
 

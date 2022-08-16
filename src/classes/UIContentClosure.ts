@@ -11,6 +11,7 @@ import {
     UIDomRenderInfo,
     UISourceBoundaryChange
 } from "../static/_Types";
+import { _Find } from "../static/_Find";
 import { _Apply } from "../static/_Apply";
 import { UIContentBoundary, UISourceBoundary } from "./UIBoundary";
 
@@ -50,11 +51,13 @@ export class UIContentClosure {
         const info = this.groundedDefsMap.get(groundingDef);
         if (info) {
             // Check if should move the content.
-            if (groundingDef.action === "moved" && treeNode.boundary) {
+            if (groundingDef.action === "moved" && treeNode.boundary)
                 // If so, it's just a simple move by collecting all root nodes inside.
-                const rInfos = treeNode.boundary.getTreeNodesForDomRoots(true).map( treeNode => ({ treeNode, move: true }) as UIDomRenderInfo );
-                return [rInfos, []];
-            }
+                return [
+                    _Find.rootDomTreeNodes(treeNode.boundary.treeNode, true).map(
+                        treeNode => ({ treeNode, move: true }) as UIDomRenderInfo ),
+                    []
+                ];
             // Nothing to do.
             return [[], []];
         }

@@ -6,7 +6,6 @@ import {
     ClassType,
     Dictionary,
     UITreeNode,
-    UITreeNodeDom,
     UIAllContexts,
     UIDefApplied,
     UIDefTarget,
@@ -48,17 +47,17 @@ class UIBaseBoundary {
     uiHost: UIHost;
     /** Whether the boundary is mounted. This is set to true right before uiDidMount is called and false after uiWillUnmount. */
     isMounted: boolean | null;
-    /** The baseTreeNode is a very important (concept and) reference for technical reasons.
+    /** The fixed treeNode of the boundary is a very important concept and reference for technical reasons.
      * - It allows to keep the separate portions of the GroundedTree structure together by tying parent and child boundary to each other.
      *   .. So, ultimately it allows us to keep a clear bookkeeping of the dom tree and makes it easy, flexible and performant to apply changes to it.
      * - The node is given by the host boundary (or uiHost for root) and the reference always stays the same (even when mangling stuff around).
      *   1. The first host is the uiHost instance: it creates the root treeNode and its first child, and passes the child for the first boundary.
-     *   2. The boundary then simply adds add kids to this baseTreeNode.
-     *   3. If the boundary has a sub-boundary in it, it similarly gives it a baseTreeNode to work with.
+     *   2. The boundary then simply adds add kids to this treeNode.
+     *   3. If the boundary has a sub-boundary in it, it similarly gives it a treeNode to work with.
      *   4. When the boundary re-renders, it will reuse the applied defs and if did for any sub-boundary,
-     *      will then reuse the same baseTreeNode and just modify its parent accordingly. So the sub-boundary doesn't even need to know about it.
+     *      will then reuse the same treeNode and just modify its parent accordingly. So the sub-boundary doesn't even need to know about it.
      */
-    baseTreeNode: UITreeNode;
+    treeNode: UITreeNode;
 
 
     // - Boundary refs - //
@@ -80,10 +79,10 @@ class UIBaseBoundary {
     _outerContextsWere?: Record<string, UIContext | null>;
 
 
-    constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: UITreeNode) {
+    constructor(uiHost: UIHost, outerDef: UIDefApplied, treeNode: UITreeNode) {
         // Init.
         this.uiHost = uiHost;
-        this.baseTreeNode = baseTreeNode;
+        this.treeNode = treeNode;
         this._outerDef = outerDef;
         this._innerDef = null;
         this.isMounted = false;
@@ -93,66 +92,29 @@ class UIBaseBoundary {
         this.outerContexts = {};
     }
 
-    // - Getters - //
+    // // - Getters - //
+    //
+    // public getRootTreeNodes(): UITreeNode[] {
+    //     return [...this.treeNode.children];
+    // }
+    //
+    // public getRootDomTreeNodes(inNestedBoundaries: boolean = false, includeEmpty: boolean = false): UITreeNodeDom[] {
+    //     return _Apply.getRootDomTreeNodes(this.treeNode, inNestedBoundaries, includeEmpty);
+    // }
+    //
+    // /** This gets the first rooted dom element. */
+    // public getRootDomNode(): Node | null {
+    //     return this.treeNode.domNode;
+    // }
+    //
+    // /** This gets the dom elements that are rooted. Typically it's just one, but due to fragments (with nested components), it might be several.
+    //  * .. So for example when inserting the component into dom, we must get them all. (On unmounting, it's happens more naturally.)
+    //  * .. For most technical purposes, you want to include the hidden <noscript/> elements.
+    //  * .. For end user purposes, they are more often interested in what is actually visible, so includeHidden is defaulted to false. */
+    // public getRootDomNodes(inNestedBoundaries: boolean = false): Node[] {
+    //     return _Apply.getRootDomTreeNodes(this.treeNode, inNestedBoundaries, false).map(treeNode => treeNode.domNode) as Node[];
+    // }
 
-    public getRootTreeNodes(): UITreeNode[] {
-        return [...this.baseTreeNode.children];
-    }
-
-    public getTreeNodesForDomRoots(inNestedBoundaries: boolean = false, includeEmpty: boolean = false): UITreeNodeDom[] {
-        return _Apply.getTreeNodesForDomRootsUnder(this.baseTreeNode, inNestedBoundaries, includeEmpty);
-    }
-
-    /** This gets the first rooted dom element. */
-    public getRootDomNode(): Node | null {
-        return this.baseTreeNode.domNode;
-    }
-
-    /** This gets the dom elements that are rooted. Typically it's just one, but due to fragments (with nested components), it might be several.
-     * .. So for example when inserting the component into dom, we must get them all. (On unmounting, it's happens more naturally.)
-     * .. For most technical purposes, you want to include the hidden <noscript/> elements.
-     * .. For end user purposes, they are more often interested in what is actually visible, so includeHidden is defaulted to false. */
-    public getRootDomNodes(inNestedBoundaries: boolean = false): Node[] {
-        return _Apply.getTreeNodesForDomRootsUnder(this.baseTreeNode, inNestedBoundaries, false).map(treeNode => treeNode.domNode) as Node[];
-    }
-
-    /** This gets all dom nodes that belong to this boundary. */
-    public getAllDomNodes(includeOurPassFurther: boolean = true, includePassedToUs: boolean = false): Node[] {
-        // Prepare.
-        if (!this._innerDef)
-            return [];
-        const list: Node[] = [];
-        let appliedDefsLeft: UIDefApplied[] = [this._innerDef];
-        let appliedDef: UIDefApplied | undefined;
-        let i = 0;
-        // Loop recursively in tree order.
-        while (appliedDef = appliedDefsLeft[i]) {
-            // Next.
-            i++;
-            // Skips based on type.
-            if (appliedDef.treeNode) {
-                const type = appliedDef.treeNode.type;
-                // Skip nested uiHosts.
-                if (type === "host")
-                    continue;
-                // Skip parts where we pass content into other boundaries.
-                if (!includeOurPassFurther && type === "boundary")
-                    continue;
-                // Skip parts where we insert content pass.
-                if (!includePassedToUs && type === "pass")
-                    continue;
-            }
-            // Add child defs to top of queue.
-            if (appliedDef.childDefs[0]) {
-                appliedDefsLeft = appliedDef.childDefs.concat(appliedDefsLeft.slice(i));
-                i = 0;
-            }
-            // Add dom nodes.
-            if (appliedDef.treeNode && (appliedDef.treeNode.type === "dom") && appliedDef.treeNode.domNode)
-                list.push(appliedDef.treeNode.domNode);
-        }
-        return list;
-    }
 }
 
 export class UIContentBoundary extends UIBaseBoundary {
@@ -282,14 +244,14 @@ export class UISourceBoundary extends UIBaseBoundary {
 
     // - Init & destroy - //
 
-    constructor(uiHost: UIHost, outerDef: UIDefApplied, baseTreeNode: UITreeNode, sourceBoundary?: UISourceBoundary) {
+    constructor(uiHost: UIHost, outerDef: UIDefApplied, treeNode: UITreeNode, sourceBoundary?: UISourceBoundary) {
         // Init.
-        super(uiHost, outerDef, baseTreeNode);
+        super(uiHost, outerDef, treeNode);
         this._notRendered = true;
         this.uiId = uiHost.services.createBoundaryId();
         this.sourceBoundary = sourceBoundary || null;
         this.closure = new UIContentClosure(this, sourceBoundary);
-        this.reattach(false);
+        // this.reattach(false);
     }
 
     reattach(clear: boolean = true) {
@@ -354,19 +316,28 @@ export class UISourceBoundary extends UIBaseBoundary {
                 this.live = new Live(this._outerDef.props || {}, this);
                 if (renderer)
                     this.live.render = renderer as UILive["render"];
+                // Note. In case uses contextual needs in the constructor, should pass the 2nd arg as well: super(props, boundary).
+                // .. This way, it's all handled and ready, and there's no need to add special checks or do some initial "flushing".
+                if (!this.live.uiBoundary)
+                    // We set a readonly value here - it's on purpose: it's only set if wasn't set in the constructor (by not being passed to super).
+                    (this.live as { uiBoundary: UILiveSource }).uiBoundary = this as UILiveSource;
             }
             // Assign one way reading for mini.
             if (Mini) {
                 // Content api.
                 this.contentApi = new UIContentApi(readChildren);
                 // Constructor and assign renderer.
-                this.mini = new Mini(this._outerDef.props || {}, this);
+                this.mini = new Mini(this._outerDef.props || {});
                 if (renderer)
                     this.mini.render = renderer as UIMiniFunction;
+                // Assign encapsulated by boundary.
+                this.mini.isMounted = (): boolean => this.isMounted === true;
+                this.mini.getChildren = this.contentApi.getChildren.bind(this.contentApi);
+                this.mini.needsChildren = this.contentApi.needsChildren.bind(this.contentApi);
                 // Handle Wired.
                 if (this.type === "class-wired") {
                     const Wired = Mini as UIWiredType;
-                    Wired.boundaries.add(this);
+                    Wired.uiBoundaries.add(this);
                     if (Wired.uiWillMount)
                         Wired.uiWillMount(this as UIMiniSource);
                 }
@@ -409,13 +380,14 @@ export class UISourceBoundary extends UIBaseBoundary {
                 this.live.render = content as UILive["render"];
             return this.render(iRecursion);
         }
-        // Run context updates (and other similar that have been executed before could declare the callback).
-        // .. This feature is only for Live Functions - because their initializer is run on first render call. (Note for MiniFuncs as they have no context.)
-        // .. For class components, they are either already defined by the class or then at constructor. (In either case, early enough.)
+        // Run special constructing procedures.
+        // .. This feature is only UILiveFunctions, because had no chance yet to declare contextual needs, as the initializer is run on the first render call.
         if (this._notRendered) {
+            // Unflag.
             delete this._notRendered;
+            // Call the onContextChange.
             const live: UILive<{}, {}, {}, {[name: string]: UIContext }> | undefined = this.live;
-            if (live && live.onContextChange && live.render.length > 1) {
+            if (live && live.onContextChange && this.type === "live") {
                 const allContexts = live.getContexts();
                 for (const name in allContexts)
                     live.onContextChange(name, allContexts[name] as UIContext, null);

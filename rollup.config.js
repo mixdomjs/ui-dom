@@ -60,6 +60,7 @@ export default [
         output: {
             file: 'dist/ui-dom.js',
             format: 'cjs',
+            exports: "auto"
         },
         plugins: [
             terser({

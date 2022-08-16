@@ -9,6 +9,7 @@ import {
     UIContextRefresh
 } from "../static/_Types";
 import { _Apply } from "../static/_Apply";
+import { _Lib } from "../static/_Lib";
 import { UILiveSource, UISourceBoundary } from "./UIBoundary";
 import { UIHost } from "./UIHost";
 import { UILive } from "./UILive";
@@ -93,7 +94,7 @@ export class UIContextServices {
 
     /** Refresh the context. Uses the default timing unless specified. */
     public applyRefresh(defaultTimeout: number | null, forceTimeout?: number | null): void {
-        this.pendingTimer = _Apply.refreshWithTimeout(this, this.refreshPending, this.pendingTimer, defaultTimeout, forceTimeout);
+        this.pendingTimer = _Lib.refreshWithTimeout(this, this.refreshPending, this.pendingTimer, defaultTimeout, forceTimeout);
     }
 
     /** This refreshes the context immediately.

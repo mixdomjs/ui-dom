@@ -24,8 +24,8 @@ import { UIRef } from "./UIRef";
 export type UIRenderSettings = Pick<UIHostSettings,
     "renderTextContent" |
     "renderTextTag" |
-    "renderInnerHtmlTag" |
-    "renderSvgNamespaceUri" |
+    "renderHtmlDefTag" |
+    "renderSvgNamespaceURI" |
     "renderDomPropsOnSwap" |
     "noRenderValuesMode" |
     "callRefMoveEvenIfNoDomMove" |
@@ -84,11 +84,11 @@ export class UIRender {
         // Inner html.
         const htmlMode = treeNode.def.domHtmlMode;
         if (htmlMode && simpleContent != null && simpleContent !== "")
-            return UIRender.domNodeFrom(simpleContent.toString(), (origTag as UIDomTag) || this.settings.renderInnerHtmlTag, true);
+            return UIRender.domNodeFrom(simpleContent.toString(), (origTag as UIDomTag) || this.settings.renderHtmlDefTag, true);
         // Html or svg element.
         if (origTag)
             return origTag === "svg" || treeNode.parent && treeNode.parent.domNode && treeNode.parent.domNode["ownerSVGElement"] !== undefined ?
-                document.createElementNS(this.settings.renderSvgNamespaceUri || "http://www.w3.org/2000/svg", origTag) :
+                document.createElementNS(this.settings.renderSvgNamespaceURI || "http://www.w3.org/2000/svg", origTag) :
                 document.createElement(origTag);
 
         // Tagless.
@@ -326,7 +326,7 @@ export class UIRender {
                         const htmlMode = treeNode.def.domHtmlMode;
                         if (htmlMode && content != null && content !== "") {
                             // Create a dom node.
-                            newNode = UIRender.domNodeFrom(content.toString(), (treeNode.def.tag as UIDomTag) || this.settings.renderInnerHtmlTag, true);
+                            newNode = UIRender.domNodeFrom(content.toString(), (treeNode.def.tag as UIDomTag) || this.settings.renderHtmlDefTag, true);
                             // Clear the previously applied props (if any), and mark for re-update.
                             if (treeNode.domProps) {
                                 doUpdate = true;
