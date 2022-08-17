@@ -62,7 +62,7 @@ Thank you for considering contributing to uiDom. It's an open source library and
 ### TypeScript
 
 - All code should be written in TypeScript.
-- For advanced typing algorithms, make sure there's no excessively deep iterations. Currently the only one with semi-heavy checking is `contextApi.needsContexts`, all the others use the concept of splitting the input and then comparing it to a valid set, instead of pre-building all permutations of a valid set / structure.
+- For advanced typing algorithms, make sure there's no excessively deep iterations: eg. precomputing all permutations to match against something, as opposed to eg. splitting that something and comparing it to a valid base set. As of v2.0.0, there's no more heavy type checking anywhere in uiDom. 
 
 ### Commenting
 
