@@ -5,18 +5,22 @@
 
 import { _Lib } from "./_Lib";
 import {
-    UIGenericProps,
     UIGenericPostProps,
     UIDefTarget,
     UIDefType,
     UIDefApplied,
     UIPreTag,
-    UIBoundaryTag,
+    UIComponentTag,
     UIDomTag,
     UIRenderOutput,
     UIContentValue,
     Dictionary,
+    DomTags,
+    HTMLSVGAttributes,
+    UIComponentProps,
 } from "./_Types";
+// import { JSXInternal } from "./_JSX";
+
 import {
     UIPortalProps,
     UIElementProps,
@@ -28,7 +32,162 @@ import { UIHost } from "../classes/UIHost";
 import { UIContextsProps } from "../classes/UIContext";
 
 
+
+
 // - Exports - //
+
+export function createDef<DomTag extends DomTags>(domTag: DomTag, origProps?: HTMLSVGAttributes<DomTag> | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+export function createDef<Props extends Dictionary = {}>(componentTag: UIComponentTag<Props>, origProps?: (Props & UIComponentProps) | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+export function createDef(tagOrClass: UIPreTag, origProps: Dictionary | null = null, ...contents: UIRenderOutput[]): UIDefTarget | null {
+    // Get type.
+    const defType = _Defs.getDefType(tagOrClass);
+    if (!defType)
+        return null;
+
+    // Add childDefs to the def.
+    const childDefs: UIDefTarget[] = [];
+    let wasText = false;
+    let iContent = 0;
+    for (const content of contents) {
+        // Let's join adjacent string content together - there's no need to create a textNode for each.
+        // .. This improves performance: 1. less dom operations, 2. less stuff (= less processing).
+        let isText = typeof content === "string";
+        if (content && isText && wasText) {
+            childDefs[iContent-1].domContent += content as string;
+            continue;
+        }
+        // Create def.
+        const def = _Defs.createDefFromContent(content);
+        if (def) {
+            iContent = childDefs.push(def);
+            wasText = isText;
+        }
+    }
+
+    // Static, render immediately and return the def.
+    if (defType === "spread")
+        return (tagOrClass as typeof UISpread).unfold(origProps || {}, childDefs);
+
+    // Special case - return null, if the def is practically an empty fragment (has no simple content either).
+    // .. Note that due to how the flow works, this functions like a "remove empty fragments recursively" feature.
+    // .... This is because the flow goes up: first children defs are created, then they are fed to its parent def's creation as content, and so on.
+    // .... So we don't need to do (multiple) recursions down, but instead do a single check in each scope, and the answer is ready when it's the parent's turn.
+    if (defType === "fragment" && !childDefs[0])
+        return null;
+
+    // Create the basis for the def.
+    const tag = defType === "dom" && tagOrClass as UIDomTag || defType === "boundary" && tagOrClass as UIComponentTag || defType === "element" && "_" || (defType === "content" ? "" : null);
+	const targetDef = {
+        _uiDefType: defType,
+        tag,
+        childDefs
+	} as UIDefTarget;
+
+    // Props.
+    const needsProps = !!tag;
+    if (targetDef._uiDefType === "fragment") {
+        if (origProps && origProps.withContent !== undefined)
+            targetDef.withContent = origProps.withContent;
+    }
+    else if (origProps) {
+        // Copy.
+        const { key, ref, contexts, ...passProps } = origProps;
+        if (key != null)
+            targetDef.key = key;
+        if (ref) {
+            const forwarded: UIRef[] = [];
+            if (ref.constructor["UI_DOM_TYPE"] === "Ref")
+                forwarded.push(ref as UIRef);
+            else {
+                for (const f of (ref as UIRef[]))
+                    if (f && f.constructor["UI_DOM_TYPE"] === "Ref" && forwarded.indexOf(f) === -1)
+                        forwarded.push(f);
+            }
+            targetDef.attachedRefs = forwarded;
+        }
+        if (contexts && defType === "boundary")
+            targetDef.attachedContexts = { ...contexts };
+        if (needsProps)
+            targetDef.props = typeof tag === "string" ? _Lib.cleanHtmlProps(passProps) : passProps as UIGenericPostProps;
+    }
+    // Empty props.
+    else if (needsProps)
+        targetDef.props = {};
+
+    // Specialities.
+    switch(targetDef._uiDefType) {
+        case "portal": {
+            const props = (origProps || {}) as UIPortalProps;
+            targetDef.domPortal = props.container || null;
+            if (!childDefs[0] && props && (props.content != null))
+                contents = [ props.content ];
+            break;
+        }
+        case "contexts": {
+            targetDef.contexts = (origProps || {} as UIContextsProps).cascade || null;
+            break;
+        }
+        case "element": {
+            const props = (origProps || {}) as UIElementProps;
+            targetDef.domElement = props.element || null;
+            targetDef.domCloneMode = props.cloneMode != null ? (typeof props.cloneMode === "boolean" ? (props.cloneMode ? "deep" : "") : props.cloneMode) : null;
+            delete targetDef.props["element"];
+            delete targetDef.props["cloneMode"];
+            break;
+        }
+    }
+    // Return def.
+    return targetDef;
+}
+
+// export namespace createDef {
+//     export import JSX = JSXInternal;
+// }
+// <-- This is not allowed with Rollup + TS.
+// https://github.com/Swatinem/rollup-plugin-dts/issues/162
+
+// Won't help:
+// export namespace createDef {
+//
+//     namespace JSX {
+//
+//         // - Internal - //
+//
+//         export type Attributes<Tag extends DomTags = DomTags> = HTMLSVGAttributes<Tag>;
+//
+//         // - TypeScript - //
+//
+//         export type IntrinsicElements = {
+//             [Tag in DomTags]: Attributes<Tag>;
+//         };
+//
+//         export interface ElementAttributesProperty {
+//             props: any;
+//         }
+//
+//         export interface IntrinsicAttributes {
+//             key?: any;
+//         }
+//
+//         // export interface ElementClass extends UIComponent<any> {}
+//         // export interface ElementClass { }
+//         // interface Element {
+//         // 	type: UIComponentTag<Props> | DomTag;
+//         // 	props: Props;
+//         // 	key: any;
+//         // 	ref?: UIRef | UIRef[] | null;
+//         // }
+//
+//         export interface ElementAttributesProperty {
+//             props: any;
+//         }
+//
+//         export interface ElementChildrenAttribute {
+//             // children?: never;
+//         }
+//     }
+// }
+
 
 export const _Defs = {
 
@@ -62,111 +221,8 @@ export const _Defs = {
         }
     },
 
-    // Note. The created DEF has the props.children removed and cleaned into its own property here.
-    // .. When the props are applied to a component the children will be added back into props.
-    // .. Returns null only if has no tagOrClass and no contentPass defined.
-    createDef<Props extends Dictionary = {}>(tagOrClass: UIPreTag = "div", origProps: UIGenericProps<Props> | null = null, ...contents: UIRenderOutput[]): UIDefTarget | null {
-
-        // Get type.
-        const defType = _Defs.getDefType(tagOrClass);
-        if (!defType)
-            return null;
-
-        // Add childDefs to the def.
-        const childDefs: UIDefTarget[] = [];
-        let wasText = false;
-        let iContent = 0;
-        for (const content of contents) {
-            // Let's join adjacent string content together - there's no need to create a textNode for each.
-            // .. This improves performance: 1. less dom operations, 2. less stuff (= less processing).
-            let isText = typeof content === "string";
-            if (content && isText && wasText) {
-                childDefs[iContent-1].domContent += content as string;
-                continue;
-            }
-            // Create def.
-            const def = _Defs.createDefFromContent(content);
-            if (def) {
-                iContent = childDefs.push(def);
-                wasText = isText;
-            }
-        }
-
-        // Static, render immediately and return the def.
-        if (defType === "spread")
-            return (tagOrClass as typeof UISpread).unfold(origProps || {}, childDefs);
-
-        // Special case - return null, if the def is practically an empty fragment (has no simple content either).
-        // .. Note that due to how the flow works, this functions like a "remove empty fragments recursively" feature.
-        // .... This is because the flow goes up: first children defs are created, then they are fed to its parent def's creation as content, and so on.
-        // .... So we don't need to do (multiple) recursions down, but instead do a single check in each scope, and the answer is ready when it's the parent's turn.
-        if (defType === "fragment" && !childDefs[0])
-            return null;
-
-        // Create the basis for the def.
-        const tag = defType === "dom" && tagOrClass as UIDomTag || defType === "boundary" && tagOrClass as UIBoundaryTag || defType === "element" && "_" || (defType === "content" ? "" : null);
-		const targetDef = {
-            _uiDefType: defType,
-            tag,
-            childDefs
-		} as UIDefTarget;
-
-        // Props.
-        const needsProps = !!tag;
-        if (targetDef._uiDefType === "fragment") {
-            if (origProps && origProps.withContent !== undefined)
-                targetDef.withContent = origProps.withContent;
-        }
-        else if (origProps) {
-            // Copy.
-            const { key, ref, contexts, ...passProps } = origProps;
-            if (key != null)
-                targetDef.key = key;
-            if (ref) {
-                const forwarded: UIRef[] = [];
-                if (ref.constructor["UI_DOM_TYPE"] === "Ref")
-                    forwarded.push(ref as UIRef);
-                else {
-                    for (const f of (ref as UIRef[]))
-                        if (f && f.constructor["UI_DOM_TYPE"] === "Ref" && forwarded.indexOf(f) === -1)
-                            forwarded.push(f);
-                }
-                targetDef.attachedRefs = forwarded;
-            }
-            if (contexts && defType === "boundary")
-                targetDef.attachedContexts = { ...contexts };
-            if (needsProps)
-                targetDef.props = typeof tag === "string" ? _Lib.cleanHtmlProps(passProps) : passProps as UIGenericPostProps;
-        }
-        // Empty props.
-        else if (needsProps)
-            targetDef.props = {};
-
-        // Specialities.
-        switch(targetDef._uiDefType) {
-            case "portal": {
-                const props = (origProps || {}) as UIPortalProps;
-                targetDef.domPortal = props.container || null;
-                if (!childDefs[0] && props && (props.content != null))
-                    contents = [ props.content ];
-                break;
-            }
-            case "contexts": {
-                targetDef.contexts = (origProps || {} as UIContextsProps).cascade || null;
-                break;
-            }
-            case "element": {
-                const props = (origProps || {}) as UIElementProps;
-                targetDef.domElement = props.element || null;
-                targetDef.domCloneMode = props.cloneMode != null ? (typeof props.cloneMode === "boolean" ? (props.cloneMode ? "deep" : "") : props.cloneMode) : null;
-                delete targetDef.props["element"];
-                delete targetDef.props["cloneMode"];
-                break;
-            }
-        }
-        // Return def.
-        return targetDef;
-	},
+    // Returns null only if has no tagOrClass and no contentPass defined.
+    createDef,
 
     // Create a def out of the content.
     createDefFromContent(renderContent: UIRenderOutput): UIDefTarget | null {
@@ -276,6 +332,42 @@ export const _Defs = {
     },
 
     // A unique but common to all key for uiDom.Content defs - used unless specifically given a key.
-    ContentKey: {},
+    ContentKey: {}
 
 }
+
+
+// // - Testing - //
+// //
+// // createDef("fail", { "style": {color: "#aac"} });
+// createDef("span", { "style": {color: "#aac"} });
+// // createDef("span", { "styleFAIL": {color: "#aac"} });
+// // createDef("span", { "styleFAIL": {color: "#aac"} as const } as const);
+// // createDef("span", { "class": true });
+// createDef("span", { "class": "true" });
+// // createDef("span", { "style": {colorFAIL: "#aac"} });
+// // createDef("span", { "style": {colorFAIL: "#aac" } as const } as const);
+//
+// import { UIMini } from "../classes/UIMini";
+// import { UIContext } from "../classes/UIContext";
+// import { uiDom } from "../uiDom";
+// import { UIAllContexts } from "../static/_Types";
+//
+// interface TestProps { test: boolean; }
+// const Test = (props: TestProps) => {
+//     return null;
+// }
+// class TestClass extends UIMini<TestProps> {}
+// const contexts = { "test": new UIContext() };
+// // const contexts: UIAllContexts = { "test": new UIContext() };
+// createDef(Test, { test: true });
+// createDef(Test, { test: true, contexts });
+// // createDef(Test, { testFAIL: true }); // Fails correctly!
+// createDef(TestClass, { test: true });
+// createDef(TestClass, { test: true, contexts });
+// // createDef(TestClass, { testFAIL: true }); // Fails correctly!
+//
+// createDef(uiDom.Contexts, { cascade: contexts });
+// // createDef(uiDom.Contexts, { cascadeFAIL: { "test": new UIContext() } }); // Fails correctly!
+// createDef(uiDom.Fragment, { withContent: true });
+// // createDef(uiDom.Fragment, { withContentFAIL: true }); // Fails correctly!

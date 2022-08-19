@@ -9,7 +9,7 @@ import {
     UIRenderOutput,
 } from "../static/_Types";
 import { _Defs } from "../static/_Defs";
-import { UIMiniSource, UISourceBoundary } from "./UIBoundary";
+import { UIMiniBoundary, UISourceBoundary } from "./UIBoundary";
 import { UIMini } from "./UIMini";
 import { uiContent } from "../uiDom";
 
@@ -28,8 +28,8 @@ export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps
     public static uiBoundaries: Set<UISourceBoundary>;
     public static source: UIComponent;
     public static builder: ((...params: any[]) => Dictionary) | null;
-    public static mixer: ((baseProps: Dictionary, addsProps: Dictionary, ...params: any[]) => Dictionary) | null;
-    public static props: Dictionary;
+    public static mixer: ((baseProps: Dictionary, addedProps: Dictionary, ...params: any[]) => Dictionary) | null;
+    public static addedProps: Dictionary;
 
     // - Methods - //
 
@@ -42,13 +42,13 @@ export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps
     // - Settings that will be used for UIMini purposes (automatically used by all instances) - //
 
     public static updateMode: UIUpdateCompareMode | null;
-    public static uiWillMount?(boundary: UIMiniSource): void;
-    public static uiDidMount?(boundary: UIMiniSource): void;
-    public static uiShouldUpdate?(boundary: UIMiniSource, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
-    public static uiBeforeUpdate?(boundary: UIMiniSource, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
-    public static uiDidUpdate?(boundary: UIMiniSource, prevProps: Dictionary | null, newProps: Dictionary | null): void;
-    public static uiDidMove?(boundary: UIMiniSource): void;
-    public static uiWillUnmount?(boundary: UIMiniSource): void;
+    public static uiWillMount?(boundary: UIMiniBoundary): void;
+    public static uiDidMount?(boundary: UIMiniBoundary): void;
+    public static uiShouldUpdate?(boundary: UIMiniBoundary, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
+    public static uiBeforeUpdate?(boundary: UIMiniBoundary, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
+    public static uiDidUpdate?(boundary: UIMiniBoundary, prevProps: Dictionary | null, newProps: Dictionary | null): void;
+    public static uiDidMove?(boundary: UIMiniBoundary): void;
+    public static uiWillUnmount?(boundary: UIMiniBoundary): void;
 
     // - Instanced - //
 
@@ -63,7 +63,7 @@ export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps
 
 /** The static class type for UIWired that is extended when creates a wired source.
  * Note that you can use the UIMini callbacks, they are called after calling them on the instance (if even were there). */
-export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps> = {
+export type UIWiredType<BaseProps = {}, AddedProps = {}, MixedProps = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps> = {
 
 
     // - Static & construct - //
@@ -82,7 +82,8 @@ export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps 
     source: UIComponent;
     builder: Builder | null;
     mixer: Mixer | null;
-    props: WiredProps;
+    addedProps: AddedProps;
+
     /** Default update mode.
      * - By default, we are in "always" mode, because this is an intermediary boundary: each wired target will anyway do its checking.
      * - This is to prevent rare cases where would feel like a bug - without having to go deep into the docs or code to find out why. */
@@ -91,7 +92,7 @@ export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps 
 
     // - Methods - //
 
-    getAddedProps(): WiredProps;
+    getAddedProps(): AddedProps;
     getMixedProps(props: BaseProps): MixedProps;
 
     /** Call this to rebuild the wired part of props and force a refresh on the instances.
@@ -102,21 +103,21 @@ export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps 
 
     /** Call this to manually update the wired part of props and force a refresh.
      * - This is most often called by the static refresh method above, with props coming from Wired.builder. */
-    setProps(props: WiredProps, update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
+    setProps(props: AddedProps, update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
 
 
     // - Settings that will be used for UIMini purposes (automatically used by all instances) - //
 
     /** Special call for wired only - called right after constructing the wired instance. You can access the mini instance by boundary.mini. */
-    uiWillMount?(boundary: UIMiniSource<BaseProps>): void;
-    uiDidMount?(boundary: UIMiniSource<BaseProps>): void;
+    uiWillMount?(boundary: UIMiniBoundary<BaseProps>): void;
+    uiDidMount?(boundary: UIMiniBoundary<BaseProps>): void;
     /** On wired, the static .uiShouldUpdate is not called if the instance had .uiShouldUpdate and it returned a boolean.
      * - Otherwise, this is called and can affect the outcome normally. */
-    uiShouldUpdate?(boundary: UIMiniSource<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
-    uiBeforeUpdate?(boundary: UIMiniSource<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
-    uiDidUpdate?(boundary: UIMiniSource<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
-    uiDidMove?(boundary: UIMiniSource<BaseProps>): void;
-    uiWillUnmount?(boundary: UIMiniSource<BaseProps>): void;
+    uiShouldUpdate?(boundary: UIMiniBoundary<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
+    uiBeforeUpdate?(boundary: UIMiniBoundary<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
+    uiDidUpdate?(boundary: UIMiniBoundary<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
+    uiDidMove?(boundary: UIMiniBoundary<BaseProps>): void;
+    uiWillUnmount?(boundary: UIMiniBoundary<BaseProps>): void;
 
 };
 
@@ -125,12 +126,12 @@ export type UIWiredType<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps 
 // .. Alternatively, could declare function alternatives, but the setup is quite complex - so for now, like it is.
 export const createWired = <
     BaseProps extends Dictionary = {},
-    WiredProps extends Dictionary = {},
-    MixedProps extends Dictionary = BaseProps & WiredProps,
+    AddedProps extends Dictionary = {},
+    MixedProps extends Dictionary = BaseProps & AddedProps,
     Params extends any[] = any[],
-    Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps,
-    Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps
->(component: UIComponent<MixedProps>, builderOrProps?: Builder | WiredProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer> => class Wired extends UIWired<BaseProps> {
+    Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps,
+    Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps
+>(component: UIComponent<MixedProps>, builderOrProps?: Builder | AddedProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer> => class Wired extends UIWired<BaseProps> {
 
     public static UI_DOM_TYPE = "Wired" as const;
 
@@ -140,17 +141,17 @@ export const createWired = <
     public static source: UIComponent = component;
     public static builder: Builder | null = typeof builderOrProps !== "object" && builderOrProps || null;
     public static mixer: Mixer | null = mixer || null;
-    public static props: WiredProps = !builderOrProps ? {} as WiredProps : typeof builderOrProps === "object" ? builderOrProps : builderOrProps(null, ...params);
+    public static addedProps: AddedProps = !builderOrProps ? {} as AddedProps : typeof builderOrProps === "object" ? builderOrProps : builderOrProps(null, ...params);
     /** Default update mode.
      * - By default, we are in "always" mode, because this is an intermediary boundary: each wired target will anyway do its checking.
      * - This is to prevent rare cases where would feel like a bug - without having to go deep into the docs or code to find out why. */
     public static updateMode: UIUpdateCompareMode | null = "always";
 
-    public static getAddedProps(): WiredProps {
-        return Wired.builder ? Wired.builder(Wired.props, ...params) : Wired.props;
+    public static getAddedProps(): AddedProps {
+        return Wired.builder ? Wired.builder(Wired.addedProps, ...params) : Wired.addedProps;
     }
     public static getMixedProps(props: BaseProps): MixedProps {
-        return Wired.mixer ? Wired.mixer(props, Wired.props, ...params) : { ...props, ...Wired.props } as MixedProps;
+        return Wired.mixer ? Wired.mixer(props, Wired.addedProps, ...params) : { ...props, ...Wired.addedProps } as MixedProps;
     }
 
     /** Call this to rebuild the wired part of props and force a refresh on the instances.
@@ -167,15 +168,15 @@ export const createWired = <
 
     /** Call this to manually update the wired part of props and force a refresh.
      * - This is most often called by the static refresh method above, with props coming from Wired.builder. */
-    public static setProps(props: WiredProps, update: boolean | "force" = true, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
+    public static setProps(props: AddedProps, update: boolean | "force" = true, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
         // No change - but verify that is no forcing in anyhow.
-        if (this.props === props && update !== "force" && forceUpdateTimeout === undefined && forceRenderTimeout === undefined)
+        if (Wired.addedProps === props && update !== "force" && forceUpdateTimeout === undefined && forceRenderTimeout === undefined)
             return;
         // Set props to the static class.
-        Wired.props = props;
+        Wired.addedProps = props;
         // Update each instanced boundary.
-        // .. We will force the update, since we are hiding the new props in the Wired.props.
-        // .. Of course, the boundary has no idea about this: its props are the ones that we'll mixwith Wired.props and feed into our Wired.renderer instances.
+        // .. We will force the update, since we are hiding the new props in the Wired.addedProps.
+        // .. Of course, the boundary has no idea about this: its props are the ones that we'll mixwith Wired.addedProps and feed into our Wired.renderer instances.
         // .. Note that the actual sub boundary, will then do its own should update logic with the mixed props.
         if (update)
             Wired.update(forceUpdateTimeout, forceRenderTimeout);

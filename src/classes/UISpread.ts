@@ -5,12 +5,12 @@
 import {
     Dictionary,
     UIDefTarget,
-    UIGenericProps,
+    UIDomProps,
     UISpreadFunction,
 } from "../static/_Types";
 import { _Defs } from "../static/_Defs";
 
-export type UISpreadProps<Props extends Dictionary = {}> = UIGenericProps<Props>;
+export type UISpreadProps<Props extends Dictionary = {}> = UIDomProps<Props>;
 export class UISpread<Props extends Dictionary = {}> {
     public static UI_DOM_TYPE = "Spread";
     constructor(_props?: Props | null) { }

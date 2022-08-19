@@ -18,12 +18,28 @@ import {
     UIAllContexts,
     ClassBaseMixer,
 } from "../static/_Types";
-import { UILiveSource } from "./UIBoundary";
+import { UILiveBoundary } from "./UIBoundary";
 import { UIContextServices } from "./UIContextServices";
 
 
 // - UIContext - //
 
+export type UIContextSettings<ActionTypes extends string = string> = {
+    /** Set of action types that should always be sent after the update-n-render cycle.
+     * If overlaps with quickActions, will be interpreted as a post action.*/
+    postActions: null | Set<ActionTypes>;
+    /** Set of action types that should always be run immediately.
+     * - Set true to force all as quick - this changes the general behaviour.
+     * - Note that if overlaps with postActions, will be treated as a post action. */
+    quickActions: true | null | Set<ActionTypes>;
+    /** Timeout for refreshing for this particular context.
+     * - The timeout is used for both: data refresh and (normal) actions.
+     * - If null, then synchronous - defaults to 0ms.
+     * - Note that if you use null, the updates will run synchronously.
+     *   .. It's not recommended to use it, because you'd have to make sure you always use it in that sense.
+     *   .. For example, the component you called from might have already unmounted on the next line (especially if host is fully synchronous, too). */
+    refreshTimeout: number | null;
+};
 export type UIContextSettingsUpdate<ActionTypes extends string = string> = {
     refreshTimeout?: null | number;
     postActions?: null | ActionTypes | ActionTypes[] | Set<ActionTypes>;
@@ -39,11 +55,7 @@ function _UIContextMixin(Base: ClassType) {
         // - Basic members - //
 
         public data: any;
-        public settings: {
-            postActions: null | Set<string>;
-            quickActions: true | null | Set<string>;
-            refreshTimeout: number | null;
-        };
+        public settings: UIContextSettings;
         public services: UIContextServices;
 
 
@@ -52,8 +64,8 @@ function _UIContextMixin(Base: ClassType) {
         // .. These are kept here (instead of .services), for custom mangling (in case extends UIContext or UIContextMixin).
 
         public inTree: Map<UITreeNodeContexts, Set<string>>;
-        public dataBoundaries: Map<UILiveSource, Set<string>>;
-        public actionBoundaries: Map<UILiveSource, Set<string>>;
+        public dataBoundaries: Map<UILiveBoundary, Set<string>>;
+        public actionBoundaries: Map<UILiveBoundary, Set<string>>;
         public dataListeners: Map<UIUponData<UIContext>, Set<string> | true>;
         public actionListeners: Map<UIUponAction<UIContext> | UIUponQuestion<UIContext>, Set<string> | true>;
         public actionHandlers: Map<UIUponPreAction<UIContext>, Set<string> | true>;
@@ -261,9 +273,9 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
      * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
     inTree: Map<UITreeNodeContexts, Set<string>>;
     /** The source boundaries that are interested in the data and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-    dataBoundaries: Map<UILiveSource, Set<string>>;
+    dataBoundaries: Map<UILiveBoundary, Set<string>>;
     /** The source boundaries that are intersted in the actions and attached to it by 1. cascading, 2. tunneling, or 3. overriding. */
-    actionBoundaries: Map<UILiveSource, Set<string>>;
+    actionBoundaries: Map<UILiveBoundary, Set<string>>;
     /** External data listeners - called after the live components. The keys are data listener callbacks, and values are interests. */
     dataListeners: Map<UIUponData<UIContext<Data, Actions>>, Set<string> | true>;
     /** External action listeners - called after the live components. The keys are action listener / question answer callbacks, and values are action interests. */
@@ -281,22 +293,7 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     data: Data;
 
     // Settings.
-    settings: {
-        /** Set of action types that should always be sent after the update-n-render cycle.
-         * If overlaps with quickActions, will be interpreted as a post action.*/
-        postActions: null | Set<Actions["type"] & string>;
-        /** Set of action types that should always be run immediately.
-         * - Set true to force all as quick - this changes the general behaviour.
-         * - Note that if overlaps with postActions, will be treated as a post action. */
-        quickActions: true | null | Set<Actions["type"] & string>;
-        /** Timeout for refreshing for this particular context.
-         * - The timeout is used for both: data refresh and (normal) actions.
-         * - If null, then synchronous - defaults to 0ms.
-         * - Note that if you use null, the updates will run synchronously.
-         *   .. It's not recommended to use it, because you'd have to make sure you always use it in that sense.
-         *   .. For example, the component you called from might have already unmounted on the next line (especially if host is fully synchronous, too). */
-        refreshTimeout: number | null;
-    };
+    settings: UIContextSettings<Actions["type"] & string>;
 
     /** Internal services to keep the whole thing together and synchronized.
      * They are the semi-private internal part of UIContext, so separated into its own class. */
@@ -312,18 +309,17 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
 
     // - Listeners - //
 
-    /** Adds a new action pre-listener that can talkback how to treat the action. If exists already, overrides. */
+    /** Adds a new action handler that can talkback how to treat the action. If exists already, overrides. */
     addActionHandler(listener: UIUponPreAction<UIContext<Data, Actions>>, actionTypes?: Actions["type"] & string | (Actions["type"] & string)[] | true): void;
-    /** Remove an action listener. */
+    /** Remove an earlier assigned action handler. */
     removeActionHandler(listener: UIUponPreAction): void;
-    /** Adds a new action listener, or overrides if already exists. */
+    /** Adds a new action listener, or overrides if already exists - if about questions, can return the answer. */
     addActionListener(listener: UIUponAction<UIContext<Data, Actions>> | UIUponQuestion<UIContext<Data, Actions>>, actionTypes?: Actions["type"] & string | (Actions["type"] & string)[] | true): void;
     /** Remove an action listener. */
     removeActionListener(listener: UIUponAction<UIContext<Data, Actions>> | UIUponQuestion<UIContext<Data, Actions>>): void;
     /** Adds a new data listener, or overrides if already exists. */
     addDataListener<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(listener: UIUponData<UIContext<Data, Actions>>, refreshKeys?: DataKey | DataKey[] | true): void;
-    // addDataListener<RefreshKeys extends NestedPaths<Data, NonDictionary, SafeIteratorDepthDefault>>(listener: UIUponData<UIContext<Data, Actions>>, refreshKeys?: RefreshKeys | RefreshKeys[] | true): void;
-    /** Remove an data listener. */
+    /** Remove an earlier assigned data listener. */
     removeDataListener(listener: UIUponData): void;
 
 
@@ -388,7 +384,6 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
 
     /** This refreshes both: context & pending actions.
      * - If refreshKeys defined, will add them - otherwise only refreshes pending.
-     * - The refresh flows down the tree, and for each matching boundary, calls the action first and then checks context.
      * - Note that if the live component was interested in the context, will use the .addToUpdates flow - so there might be a timeout before gets actually applied.
      * - Note that if !!refreshKeys is false, then will not add any refreshKeys. If there were none, will only update actions. */
     refresh<DataKey extends PropType<Data, DataKey, never> extends never ? never : string>(refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
@@ -397,12 +392,12 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     // - Optional assignable callbacks - //
 
     // Tree nodes.
-    onInsertInto?(treeNode: UITreeNodeContexts, name: string): void;
-    onRemoveFrom?(treeNode: UITreeNodeContexts, name: string): void;
+    onInsertInto?(treeNode: UITreeNodeContexts, ctxName: string): void;
+    onRemoveFrom?(treeNode: UITreeNodeContexts, ctxName: string): void;
 
     // Boundary interests.
-    onDataInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
-    onActionInterests?(boundary: UILiveSource, ctxName: string, isInterested: boolean): void;
+    onDataInterests?(boundary: UILiveBoundary, ctxName: string, isInterested: boolean): void;
+    onActionInterests?(boundary: UILiveBoundary, ctxName: string, isInterested: boolean): void;
 
 }
 export class UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> extends _UIContextMixin(Object) {
@@ -432,20 +427,19 @@ export type UIContextsProps<AllContexts extends UIAllContexts = {}> = {
     /** Include many named contexts. */
     cascade: AllContexts | null;
 }
-export class UIContexts<AllContexts extends UIAllContexts = {}> {
+export class UIContexts<AllContexts extends UIAllContexts = {}, Props extends UIContextsProps = UIContextsProps> {
     public static UI_DOM_TYPE = "Contexts";
-    /** It's not really included here, as it's just a type. */
     contexts: AllContexts;
-    // We need a constructor here for typescript TSX.
-    constructor(_props: UIContextsProps) {}
+    props: Props;
+    constructor(_props: Props) { }
 }
 export type UIContextsType<AllContexts extends UIAllContexts = {}> = ClassType<UIContexts<AllContexts>, [UIContextsProps]> & {
     readonly UI_DOM_TYPE: "Contexts";
 }
 /** Create multiple named contexts. (Useful for tunneling.) */
-export const createContexts = <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name]> }, AllData extends { [Name in keyof Contexts]: Contexts[Name]["data"] } = { [Name in keyof Contexts]: Contexts[Name]["data"] }>(contextsData: AllData): Contexts => {
+export const createContexts = <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name]> }, AllData extends { [Name in keyof Contexts]: Contexts[Name]["data"] } = { [Name in keyof Contexts]: Contexts[Name]["data"] }>(contextsData: AllData, settings?: UIContextSettingsUpdate): Contexts => {
     const contexts: Record<string, UIContext> = {};
     for (const name in contextsData)
-        contexts[name] = createContext(contextsData[name]);
+        contexts[name] = createContext(contextsData[name], settings);
     return contexts as Contexts;
 };

@@ -18,7 +18,7 @@ import { _Defs } from "../static/_Defs";
 import { _Find } from "../static/_Find";
 import { _Apply } from "../static/_Apply";
 import { UIRender } from "./UIRender";
-import { UILiveSource, UIMiniSource, UISourceBoundary } from "./UIBoundary";
+import { UILiveBoundary, UIMiniBoundary, UISourceBoundary } from "./UIBoundary";
 import { UIMini } from "./UIMini";
 import { UIWiredType } from "./UIWired";
 import { UIContext } from "./UIContext";
@@ -294,7 +294,7 @@ export class UIHostServices {
 
     /** This is the core whole command to update a source boundary including checking if it should update and if has already been updated.
      * - It handles the _preUpdates bookkeeping and should update checking and return infos for changes.
-     * - It should only be called from a few places: 1. runUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. _Apply.updateInterested for updating indirectly interested sub boundaries.
+     * - It should only be called from a few places: 1. runUpdates flow above, 2. within _Apply.applyDefPairs for updating nested, 3. UIHostServices.updateInterested for updating indirectly interested sub boundaries.
      * - If gives bInterested, it's assumed to be be unordered, otherwise give areOrdered = true. */
     public updateBoundary(boundary: UISourceBoundary, forceUpdate: boolean | "all" = false, movedNodes?: UITreeNode[], bInterested: UISourceBoundary[] = [], areOrdered: boolean = false): UIChangeInfos | null {
 
@@ -375,7 +375,7 @@ export class UIHostServices {
                         if (mini.uiShouldUpdate)
                             preShould = mini.uiShouldUpdate(preUpdates.props || null, newUpdates.props || null);
                         if (preShould == null && wired && wired.uiShouldUpdate)
-                            preShould = wired.uiShouldUpdate(boundary as UIMiniSource, preUpdates.props || null, newUpdates.props || null);
+                            preShould = wired.uiShouldUpdate(boundary as UIMiniBoundary, preUpdates.props || null, newUpdates.props || null);
                     }
                 }
                 // Run by background system.
@@ -395,7 +395,7 @@ export class UIHostServices {
                     for (const name in contexts) {
                         const ctx = contexts[name];
                         if (ctx)
-                            ctx.services.onBoundaryMove(boundary as UILiveSource, name);
+                            ctx.services.onBoundaryMove(boundary as UILiveBoundary, name);
                     }
                 }
                 // For clarity and robustness, we collect the render infos here for move, as we collect the boundary for move here, too.
@@ -417,10 +417,10 @@ export class UIHostServices {
             if (allWired) {
                 for (const Wired of allWired) {
                     // Build new props - without doing the refresh (we'll do it below, if needed).
-                    const propsWere = Wired.props;
+                    const propsWere = Wired.addedProps;
                     Wired.refresh(false);
                     // Skip if stays the same - the builder has returned the lastProps on purpose.
-                    if (propsWere === Wired.props)
+                    if (propsWere === Wired.addedProps)
                         continue;
                     // Collect interested.
                     for (const b of Wired.uiBoundaries) {
@@ -448,7 +448,7 @@ export class UIHostServices {
                 if (mini.uiBeforeUpdate)
                     mini.uiBeforeUpdate(preUpdates.props || null, newUpdates.props || null, shouldUpdate);
                 if (wired && wired.uiBeforeUpdate)
-                    wired.uiBeforeUpdate(boundary as UIMiniSource, preUpdates.props || null, newUpdates.props || null, shouldUpdate);
+                    wired.uiBeforeUpdate(boundary as UIMiniBoundary, preUpdates.props || null, newUpdates.props || null, shouldUpdate);
             }
         }
 
@@ -584,14 +584,14 @@ export class UIHostServices {
                     if (ui && ui.uiDidUpdate)
                         boundary.live ? (ui.uiDidUpdate as NonNullable<UILive["uiDidUpdate"]>)(myPreUpdates || {}, myUpdates || {}) : (ui.uiDidUpdate as NonNullable<UIMini["uiDidUpdate"]>)(myPreUpdates && myPreUpdates.props || {}, myUpdates && myUpdates.props || {});
                     if (wired && wired.uiDidUpdate)
-                        wired.uiDidUpdate(boundary as UIMiniSource, myPreUpdates && myPreUpdates.props || {}, myUpdates && myUpdates.props || {});
+                        wired.uiDidUpdate(boundary as UIMiniBoundary, myPreUpdates && myPreUpdates.props || {}, myUpdates && myUpdates.props || {});
                     break;
                 case "mounted": {
                     // Call uiDidMount.
                     if (ui && ui.uiDidMount)
                         ui.uiDidMount();
                     if (wired && wired.uiDidMount)
-                        wired.uiDidMount(boundary as UIMiniSource);
+                        wired.uiDidMount(boundary as UIMiniBoundary);
                     // Call on all that reffed us.
                     if (boundary._outerDef.attachedRefs) {
                         for (const ref of boundary._outerDef.attachedRefs)
@@ -606,13 +606,13 @@ export class UIHostServices {
                     if (ui && ui.uiDidMove)
                         ui.uiDidMove();
                     if (wired && wired.uiDidMove)
-                        wired.uiDidMove(boundary as UIMiniSource);
+                        wired.uiDidMove(boundary as UIMiniBoundary);
                     // Updated.
                     if (change === "updated-n-moved") {
                         if (ui && ui.uiDidUpdate)
                             boundary.live ? (ui.uiDidUpdate as NonNullable<UILive["uiDidUpdate"]>)(myPreUpdates || {}, myUpdates || {}) : (ui.uiDidUpdate as NonNullable<UIMini["uiDidUpdate"]>)(myPreUpdates && myPreUpdates.props || {}, myUpdates && myUpdates.props || {});
                         if (wired && wired.uiDidUpdate)
-                            wired.uiDidUpdate(boundary as UIMiniSource, myPreUpdates && myPreUpdates.props || {}, myUpdates && myUpdates.props || {});
+                            wired.uiDidUpdate(boundary as UIMiniBoundary, myPreUpdates && myPreUpdates.props || {}, myUpdates && myUpdates.props || {});
                         break;
                     }
             }

@@ -14,11 +14,13 @@ export { UIWired, UIWiredType, createWired } from "./classes/UIWired";
 export { UIContext, UIContextMixin, UIContextType, UIContexts, UIContextsType, createContext, createContexts } from "./classes/UIContext";
 
 // Other.
-export { UISourceBoundary, UILiveSource, UIMiniSource } from "./classes/UIBoundary";
+export { UISourceBoundary, UILiveBoundary, UIMiniBoundary } from "./classes/UIBoundary";
 
 // All addons.
 export { UIEffect, UIEffectMixin, createEffect } from "./addons/UIEffect";
 export { createDataPicker, createDataSelector, CreateDataPicker, CreateDataSelector, DataExtractor } from "./addons/DataPicker";
 
-// All types.
+// All types - with JSX IntrinsicElements support.
 export * from "./static/_Types";
+export * from "./static/_SVGTypes";
+export * from "./static/_JSX";

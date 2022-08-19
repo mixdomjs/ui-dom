@@ -32,7 +32,7 @@ import { _Defs } from "./_Defs";
 import { _Find } from "./_Find";
 import { uiContent } from "../uiDom";
 import { UIRender } from "../classes/UIRender";
-import { UIContentBoundary, UISourceBoundary, UILiveSource, UIMiniSource } from "../classes/UIBoundary";
+import { UIContentBoundary, UISourceBoundary, UILiveBoundary, UIMiniBoundary } from "../classes/UIBoundary";
 import { UIRef } from "../classes/UIRef";
 import { UILive } from "../classes/UILive";
 import { UIWiredType } from "../classes/UIWired";
@@ -666,7 +666,7 @@ export const _Apply = {
                         didChange |= UIContextRefresh.Otherwise;
                         // Update.
                         if (cApi)
-                            didChange |= _Apply.helpUpdateContext(boundary as UILiveSource, name, outerContexts[name] || null, oldCtx);
+                            didChange |= _Apply.helpUpdateContext(boundary as UILiveBoundary, name, outerContexts[name] || null, oldCtx);
                     }
                     // Check new.
                     for (const name in outerContexts) {
@@ -680,7 +680,7 @@ export const _Apply = {
                         // Remove from context.
                         didChange |= UIContextRefresh.Otherwise;
                         if (cApi)
-                            didChange |= _Apply.helpUpdateContext(boundary as UILiveSource, name, newCtx, null);
+                            didChange |= _Apply.helpUpdateContext(boundary as UILiveBoundary, name, newCtx, null);
                     }
                     // Changed - mark for contextual updates.
                     if (didChange) {
@@ -762,7 +762,7 @@ export const _Apply = {
      */
     pairDefs(byBoundary: UISourceBoundary | UIContentBoundary, preDef: UIDefTarget, newAppliedDef: UIDefApplied, defsByTags: Map<UIDefKeyTag, UIDefApplied[]>, unusedDefs: Set<UIDefApplied>, toCleanUpDefs?: UIDefApplied[], emptyMovers?: UITreeNode[] | null): ToApplyPair[] {
         // Typescript.
-        type DefLoopPair = [UIDefTargetPseudo | UIDefTarget, UIDefAppliedPseudo | UIDefApplied, UITreeNode, OuterContexts, boolean, Map<UIDefKeyTag, UIDefApplied[]>? ];
+        type DefLoopPair = [UIDefTargetPseudo | UIDefTarget, UIDefAppliedPseudo | UIDefApplied, UITreeNode | null, OuterContexts, boolean, Map<UIDefKeyTag, UIDefApplied[]>? ];
         // Prepare.
         const settings = byBoundary.uiHost.settings;
         const toApplyPairs: [UIDefTarget, UIDefApplied, UITreeNode, OuterContexts][] = [];
@@ -798,7 +798,7 @@ export const _Apply = {
                 const newDefPairs: DefLoopPair[] = [];
                 for (let i=0, toChildDef: UIDefTarget; toChildDef=toDef.childDefs[i]; i++) {
                     // Get.
-                    const tNode = treeNodes[i];
+                    const tNode = treeNodes[i] || null;
                     const aChildDef = appliedChildDefs[i];
                     // Check if should be removed.
                     if (!tNode && aChildDef.treeNode) {
@@ -810,7 +810,7 @@ export const _Apply = {
                     // Contexts.
                     const myOuterContexts = toChildDef.contexts ? _Apply.mergeOuterContexts(outerContexts, toChildDef.contexts) : outerContexts;
                     // Add to loop.
-                    const newPair: DefLoopPair = [toChildDef, aChildDef, treeNodes[i], myOuterContexts, toChildDef._uiDefType === "fragment" ];
+                    const newPair: DefLoopPair = [toChildDef, aChildDef, tNode, myOuterContexts, toChildDef._uiDefType === "fragment" ];
                     if (subDefsByTags)
                         newPair[5] = subDefsByTags;
                     newDefPairs.push(newPair);
@@ -1134,7 +1134,7 @@ export const _Apply = {
                     // Add to pre-clean up - they might get reused later, so we just mark sourceBoundary null and collect.
                     // .. If upon final clean up they still have sourceBoundary null, it means they were not used.
                     // .. Note that we must not here do an actual clean up yet - this is because there might be nested true pass content boundaries within us.
-                    const tNode: UITreeNode | undefined = treeNodes[iKid];
+                    const tNode: UITreeNode | null = treeNodes[iKid] || null;
                     if (!tNode && aChildDef.treeNode) {
                         toCleanUp.push(aChildDef.treeNode);
                         aChildDef.treeNode.sourceBoundary = null;
@@ -1323,7 +1323,7 @@ export const _Apply = {
                     // Clear timers.
                     live.clearTimers();
                     // Detach tunnels - other than cascading.
-                    const cBoundary = sBoundary as UILiveSource;
+                    const cBoundary = sBoundary as UILiveBoundary;
                     const namedCtxs = cBoundary.contextApi.getContexts();
                     for (const name in namedCtxs) {
                         const ctx = namedCtxs[name];
@@ -1341,7 +1341,7 @@ export const _Apply = {
                     // Wired.
                     if (Wired.UI_DOM_TYPE === "Wired") {
                         if (Wired.uiWillUnmount)
-                            Wired.uiWillUnmount(sBoundary as UIMiniSource);
+                            Wired.uiWillUnmount(sBoundary as UIMiniBoundary);
                         // Remove from wired bookkeeping.
                         Wired.uiBoundaries.delete(sBoundary);
                     }
@@ -1430,7 +1430,7 @@ export const _Apply = {
             return;
         // Prepare.
         const treeNode: UITreeNode = aDef.treeNode;
-        const cBoundary = treeNode.type === "boundary" && treeNode.boundary as UILiveSource || null;
+        const cBoundary = treeNode.type === "boundary" && treeNode.boundary as UILiveBoundary || null;
         const fromTunnels = aDef.attachedContexts || {};
         // Update.
         aDef.attachedContexts = toDef.attachedContexts;
@@ -1470,7 +1470,7 @@ export const _Apply = {
 
     // - Context helpers - //
 
-    helpUpdateContext(boundary: UILiveSource, name: string, newContext: UIContext | null, oldContext: UIContext | null): UIContextRefresh {
+    helpUpdateContext(boundary: UILiveBoundary, name: string, newContext: UIContext | null, oldContext: UIContext | null): UIContextRefresh {
         // Data interests.
         let changed: UIContextRefresh = 0;
         if (boundary.contextApi.contextNeeds.has(name)) {
@@ -1593,7 +1593,7 @@ export const _Apply = {
                             if (newCtx !== boundary.contextApi.getContext(name))
                                 continue;
                             // Remove / Add.
-                            didChange |= _Apply.helpUpdateContext(boundary as UILiveSource, name, newCtx, oldCtx);
+                            didChange |= _Apply.helpUpdateContext(boundary as UILiveBoundary, name, newCtx, oldCtx);
                             // Is interested.
                             if (boundary.contextApi.contextNeeds.get(name) !== undefined && collected.indexOf(boundary) === -1)
                                 collected.push(boundary as UISourceBoundary);

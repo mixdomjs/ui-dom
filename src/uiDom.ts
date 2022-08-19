@@ -4,7 +4,7 @@
 
 import {
     RecordableType,
-    UIGenericProps,
+    UIDomProps,
     UIDefTarget,
     UIRenderOutput,
     UITreeNode,
@@ -12,7 +12,7 @@ import {
     UIContextAttach,
 } from "./static/_Types";
 import { _Lib } from "./static/_Lib";
-import { _Defs } from "./static/_Defs";
+import { _Defs, createDef } from "./static/_Defs";
 import { _Find } from "./static/_Find";
 import { _Apply } from "./static/_Apply";
 import { UIFragment, UIPortal, UIElement } from "./classes/UIPseudoClasses";
@@ -34,13 +34,14 @@ import { UISourceBoundary } from "./classes/UIBoundary";
 // - Export shortcuts - //
 
 // Def.
-export const uiDef = _Defs.createDef;
+export { createDef } from "./static/_Defs";
+export const uiDef = createDef;
 
 // Content.
 export const uiContent = _Defs.newContentPassDef();
 export const uiContentCopy = _Defs.newContentPassDef({}, true);
 export const uiWithContent = (...contents: UIRenderOutput[]) =>
-    _Defs.createDef(uiDom.Fragment, { needsChildren: true }, ...contents);
+    uiDef(uiDom.Fragment, { withContent: true }, ...contents);
 
 // Collected shortcuts and static methods.
 export const uiDom = {
@@ -170,15 +171,15 @@ export const uiDom = {
     // - Def shortcuts - //
 
     /** Create a new def, like React.createElement(). Can feed JSX input. */
-    createDef: _Defs.createDef,
+    createDef,
     /** Alias for createDef for brevity. */
-    def: _Defs.createDef,
+    def: createDef,
 
     /** Returns a single html element.
      * - If a wrapInTag given will use it as a container.
      * - Otherwise, if the string refers to multiple, returns an element containing them (with settings.renderInnerHtmlTag).
      * - Normally uses a container only as a fallback if has many children. */
-    htmlDef: (innerHtml: string, wrapInTag?: keyof HTMLElementTagNameMap, props?: UIGenericProps, key?: any): UIDefTarget => {
+    htmlDef: (innerHtml: string, wrapInTag?: keyof HTMLElementTagNameMap, props?: UIDomProps, key?: any): UIDefTarget => {
         // Create def.
         const def: UIDefTarget = {
             _uiDefType: "content",

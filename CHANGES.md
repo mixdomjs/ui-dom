@@ -1,3 +1,67 @@
+## v2.3.0
+
+### Features
+
+- Added special support for `data` attribute on dom elements. It works by a dictionary, where each key becomes an attribute with `data-` prepended and decapitalized using the native `element.dataset[property]` features. For example: `{myValue: true}` will result in assigning `data-my-value` attribute to `"true"`. 
+
+### Fixes
+
+- `uiDom.withContent` shortctu was accidentally using the older `{ needsChildren: true }` vs. `{ withContent: true }` when creating a def for the `UIFragment`. (The enhanced TypeScript support now detected this internally - see below.)
+- When using custom driven wired components the `setProps` method had a tiny typo.
+
+### Minor changes
+
+- Changed the `props` static member on `UIWiredType` to `addedProps` to avoid confusing with the instanced wired components whose `props` refer to the props of that sub component. Also changed the type parameter from `WiredProps` to `AddedProps` to make its purpose less ambigious.
+- Made `findTreeNodes` method's first argument be optional also on `UILive`.
+- Removed the optional 4th argument `bindThis` on `addTimer` for `UILive` - instead the timer is always called with `this`being the `UILive` instance. 
+- Added settings argument to the `uiDom.createContexts` shortcut.
+- Changed the setting name from `preEqualCheckDomProps` to `preEqualDomProps`, and changed its default value to `if-needed` (like originally intended).
+- Some internal streamlining due to the `data` property (it's very similar to `style` as a dictionary).
+- Reorganized the contents in the 2nd parameter in `domDidUpdate(domNode, diffs)` callback on `UIRef`. Now it contains keys: `{ attributes, listeners, style, data, classNames }`.
+
+### TypeScript support for `JSX.IntrinsicElements `
+
+- This aspect had been forgotten to be implemented.
+
+  - So now the dom element props are also typed, for example `<span classFail="my-class" />` will trigger TypeScript error, or likewise `<foo />` .
+  - The attributes are based on the element for all HTML and some SVG (for other SVG tags more generally), so for example, `<button formAction={true}/>` is correct, while `<span formAction={true}/>` triggers an error. 
+  - Any element can have `key` and `ref`, as well as input `style` as a string or valid `CSSProperties` object. Finally, `class` and `className` are both valid.
+
+- It seems that `namespace JSX` is not effective unless declared globally (at leasts in the tests done, though [official docs say otherwise](https://www.typescriptlang.org/docs/handbook/jsx.html#intrinsic-elements)). So in order to make it effective, you need to do: 
+
+  - 
+
+    ```tsx
+    // Do this once, say, in the root script of your app.
+    import { JSX as _JSX } from "ui-dom";
+    declare global {
+    	namespace JSX {
+    		// This gives typing support for dom elements.
+    		interface IntrinsicElements extends _JSX.IntrinsicElements {
+    			// Add here any custom rules.
+    			foo: { bar: boolean; }; // Any "foo" must have "bar": <foo bar={true} />
+    		}
+    		// This gives components automatic typing support for "key", "ref" and "contexts".
+    		interface IntrinsicAttributes extends _JSX.IntrinsicAttributes { }
+    		// Alternatively could use:
+    		// interface IntrinsicAttributes extends UIComponentProps { }
+        }
+    }
+    // Testing - now all are typed.
+    const error = <div mistake={true} />; // <-- Triggers an error, due to "mistake" prop.
+    const okay = <foo bar={false} />; // This is okay - "foo" requires boolean "bar".
+    ```
+
+  - Note that the respective typing support is also featured in the `uiDef` or `uiDom.def` method. However TypeScript does not seem to use it for TSX conversion - but in case calls manually, the support is there.
+
+
+### Type renaming
+
+- Renamed two semi-private / semi-public types for clarity: `UILiveSource` to `UILiveBoundary` and `UIMiniSource` to `UIMiniBoundary`.
+- Refined and renamed some types related to tags (in relation to the above TSX support).
+
+---
+
 ## v2.2.0
 
 ### Additions

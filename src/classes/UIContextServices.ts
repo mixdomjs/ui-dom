@@ -10,7 +10,7 @@ import {
 } from "../static/_Types";
 import { _Apply } from "../static/_Apply";
 import { _Lib } from "../static/_Lib";
-import { UILiveSource, UISourceBoundary } from "./UIBoundary";
+import { UILiveBoundary, UISourceBoundary } from "./UIBoundary";
 import { UIHost } from "./UIHost";
 import { UILive } from "./UILive";
 import { UIContext } from "./UIContext";
@@ -368,10 +368,10 @@ export class UIContextServices {
         }
     }
 
-    public onInterest(side: "data" | "actions", boundary: UILiveSource, ctxName: string): void {
+    public onInterest(side: "data" | "actions", boundary: UILiveBoundary, ctxName: string): void {
         // Modify.
         const isData = side === "data";
-        const collection: Map<UILiveSource, Set<string>> = isData ? this.uiContext.dataBoundaries : this.uiContext.actionBoundaries;
+        const collection: Map<UILiveBoundary, Set<string>> = isData ? this.uiContext.dataBoundaries : this.uiContext.actionBoundaries;
         const current = collection.get(boundary);
         current ? current.add(ctxName) : collection.set(boundary, new Set([ctxName]));
         this.dirtyOrder |= isData ? UIContextRefresh.Data : UIContextRefresh.Actions;
@@ -381,14 +381,14 @@ export class UIContextServices {
             (this.uiContext[method] as NonNullable<UIContext[typeof method]>)(boundary, ctxName, true);
     }
 
-    public onDisInterest(side: "data" | "actions", boundary: UILiveSource, ctxName: string): void {
+    public onDisInterest(side: "data" | "actions", boundary: UILiveBoundary, ctxName: string): void {
         // Callback.
         const isData = side === "data";
         const method = isData ? "onDataInterests" : "onActionInterests";
         if (this.uiContext[method])
             (this.uiContext[method] as NonNullable<UIContext[typeof method]>)(boundary, ctxName, false);
         // Modify.
-        const collection: Map<UILiveSource, Set<string>> = isData ? this.uiContext.dataBoundaries : this.uiContext.actionBoundaries;
+        const collection: Map<UILiveBoundary, Set<string>> = isData ? this.uiContext.dataBoundaries : this.uiContext.actionBoundaries;
         const current = collection.get(boundary);
         if (current) {
             current.delete(ctxName);
@@ -397,7 +397,7 @@ export class UIContextServices {
         }
     }
 
-    public onBoundaryMove(boundary: UILiveSource, ctxName: string): void {
+    public onBoundaryMove(boundary: UILiveBoundary, ctxName: string): void {
         const cApi = boundary.contextApi;
         this.dirtyOrder |= (cApi.actionNeeds.get(ctxName) && UIContextRefresh.Actions || 0) | (cApi.contextNeeds.get(ctxName) && UIContextRefresh.Data || 0);
     }
@@ -405,11 +405,11 @@ export class UIContextServices {
 
     // - Static helpers - //
 
-    public static sortCollection(collection: Map<UILiveSource, Set<string>>): Map<UILiveSource, Set<string>> {
+    public static sortCollection(collection: Map<UILiveBoundary, Set<string>>): Map<UILiveBoundary, Set<string>> {
         // Sort.
         const sorted = [ ...collection.keys() ];
         _Apply.sortBoundaries(sorted);
         // Build a new map.
-        return new Map(sorted.map(b => [b, collection.get(b)] as [UILiveSource, Set<string>]));
+        return new Map(sorted.map(b => [b, collection.get(b)] as [UILiveBoundary, Set<string>]));
     }
 }

@@ -27,7 +27,7 @@ import {
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { _Find } from "../static/_Find";
-import { UILiveSource, UISourceBoundary } from "./UIBoundary";
+import { UILiveBoundary, UISourceBoundary } from "./UIBoundary";
 import { uiDom } from "../uiDom";
 import { UIWiredType } from "./UIWired";
 import { UIContext } from "./UIContext";
@@ -51,7 +51,7 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // Internal but public.
         public readonly uiWired: Set<UIWiredType> | null;
-        public readonly uiBoundary: UILiveSource<AllContexts>; // Set externally right after constructor.
+        public readonly uiBoundary: UILiveBoundary<AllContexts>; // Set externally right after constructor.
 
         public updateModes: Partial<UIUpdateCompareModesBy>;
 
@@ -66,7 +66,7 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             super(...args);
             // If the boundary was passed by the extending class, set it. Otherwise will be set right after.
             if (boundary) {
-                this.uiBoundary = boundary as UILiveSource;
+                this.uiBoundary = boundary as UILiveBoundary;
                 boundary.live = this as UILive;
             }
             // Init.
@@ -104,7 +104,7 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // - Timer service - automatically cleared upon unmounting - //
 
-        public addTimer(timerId: any, callback: () => void, timeout: number, bindThis: boolean = true): void {
+        public addTimer(timerId: any, callback: () => void, timeout: number): void {
             // Clear old.
             if (!this.timers)
                 this.timers = new Map();
@@ -113,10 +113,7 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             // Assign.
             this.timers.set(timerId, window.setTimeout(() => {
                 this.clearTimer(timerId);
-                if (bindThis)
-                    callback.call(this);
-                else
-                    callback();
+                callback.call(this);
             }, timeout));
         }
         public hasTimer(timerId: any): boolean {
@@ -151,24 +148,24 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             return this.uiBoundary.isMounted === true;
         }
 
-        public queryDomElement(selector: string, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false): Element | null {
-            return _Find.domElementByQuery(this.uiBoundary.treeNode, selector, allowWithinBoundaries, allowOverHosts);
+        public queryDomElement(selector: string, withinBoundaries: boolean = false, overHosts: boolean = false): Element | null {
+            return _Find.domElementByQuery(this.uiBoundary.treeNode, selector, withinBoundaries, overHosts);
         }
 
-        public queryDomElements(selector: string, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false): Element[] {
-            return _Find.domElementsByQuery(this.uiBoundary.treeNode, selector, maxCount, allowWithinBoundaries, allowOverHosts);
+        public queryDomElements(selector: string, maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false): Element[] {
+            return _Find.domElementsByQuery(this.uiBoundary.treeNode, selector, maxCount, withinBoundaries, overHosts);
         }
 
-        public findDomNodes(maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Node[] {
-            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { dom: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.domNode) as Node[];
+        public findDomNodes(maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Node[] {
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { dom: true }, maxCount, withinBoundaries, overHosts, validator).map(tNode => tNode.domNode) as Node[];
         }
 
-        public findBoundaries(maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] {
-            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { boundary: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
+        public findBoundaries(maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] {
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { boundary: true }, maxCount, withinBoundaries, overHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
         }
 
-        public findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
-            return _Find.treeNodesWithin(this.uiBoundary.treeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator);
+        public findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, types && _Lib.buildRecordable<UITreeNodeType>(types), maxCount, withinBoundaries, overHosts, validator);
         }
 
 
@@ -274,9 +271,9 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             const context = this.uiBoundary.contextApi.getContext(contextName);
             return context ? context.askQuestion(question, defaultValue) : (defaultValue === undefined ? question.value : defaultValue);
         }
-        public askQuestionWith(contextName: keyof AllContexts & string, type: string, payload: any, defaultValue?: any, maxAnswers: number = 0): any {
+        public askQuestionWith(contextName: keyof AllContexts & string, type: string, payload: any, defaultValue?: any): any {
             const context = this.uiBoundary.contextApi.getContext(contextName);
-            return context ? context.askQuestion({ type, payload, value: defaultValue } as UIActions & UIQuestion, maxAnswers) : [];
+            return context ? context.askQuestion({ type, payload, value: defaultValue } as UIActions & UIQuestion) : [];
         }
 
         public askQuestionary(contextName: keyof AllContexts & string, question: UIActions & UIQuestionary, maxAnswers: number = 0): any[] {
@@ -308,8 +305,8 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             this.uiBoundary.contextApi.overrideContext(name, context, refresh);
         }
 
-        public overrideContexts(tunnels: Record<string, UIContext | null | undefined>, refresh: boolean = true): void {
-            this.uiBoundary.contextApi.overrideContexts(tunnels, refresh);
+        public overrideContexts(contexts: Record<string, UIContext | null | undefined>, refresh: boolean = true): void {
+            this.uiBoundary.contextApi.overrideContexts(contexts, refresh);
         }
 
         public createContext(data: any, overrideWithName?: string, refreshIfOverriden: boolean = true): UIContext {
@@ -329,8 +326,8 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // - Wired renderer - //
 
-        public createWired(func: UIComponent, builder: (...params: any[]) => Dictionary, mixer: (baseProps: Dictionary, addsProps: Dictionary, ...params: any[]) => Dictionary, ...params: any[]): UIWiredType {
-            const Wired = uiDom.createWired(func, builder, mixer, ...params);
+        public createWired(component: UIComponent, builder: (...params: any[]) => Dictionary, mixer: (baseProps: Dictionary, addsProps: Dictionary, ...params: any[]) => Dictionary, ...params: any[]): UIWiredType {
+            const Wired = uiDom.createWired(component, builder, mixer, ...params);
             if (!this.uiWired)
                 // We set a readonly value here - it's on purpose: we want it to be readonly for all others except this line.
                 (this as { uiWired: Set<UIWiredType>; }).uiWired = new Set([Wired]);
@@ -360,13 +357,13 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     state: State;
     remote: Remote;
 
-    // Wired.
-    readonly uiWired: Set<UIWiredType> | null;
-
-    /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
-    readonly uiBoundary: UILiveSource;
     /** If any is undefined / null, then uses the default from uiHost.settings. */
     updateModes: Partial<UIUpdateCompareModesBy>;
+
+    /** Any wired sources we have created - if null, we haven't created any. */
+    readonly uiWired: Set<UIWiredType> | null;
+    /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
+    readonly uiBoundary: UILiveBoundary;
 
     // Semi-public.
     timers?: Map<any, number>;
@@ -381,7 +378,7 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 
     // - Timer service - automatically cleared on unmount - //
 
-    addTimer<TimerIds = any>(timerId: TimerIds, callback: () => void, timeout: number, bindThis?: boolean): void;
+    addTimer<TimerIds = any>(timerId: TimerIds, callback: () => void, timeout: number): void;
     hasTimer<TimerIds = any>(timerId: TimerIds): boolean;
     clearTimer<TimerIds = any>(timerId: TimerIds): void;
     clearTimers<TimerIds = any>(onlyTimerIds?: TimerIds[]): void;
@@ -390,11 +387,11 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     // - Getters - //
 
     isMounted(): boolean;
-    queryDomElement<T extends Element = Element>(selector: string, allowWithinBoundaries?: boolean, allowOverHosts?: boolean): T | null;
-    queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean): T[];
-    findDomNodes<T extends Node = Node>(maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
-    findBoundaries(maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
-    findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
+    queryDomElement<T extends Element = Element>(selector: string, withinBoundaries?: boolean, overHosts?: boolean): T | null;
+    queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): T[];
+    findDomNodes<T extends Node = Node>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
+    findBoundaries(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
+    findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
 
 
     // - Children - //
@@ -487,12 +484,17 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
      * - If there's no answerers, or no context found, then returns the optional defaultValue (or from question.value) - or then undefined.
      * - Note that asking a question also modifies the original question by adding .value into it with the collected answer. */
     askQuestion<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & { value?: Action["value"]; }, value?: Action["value"]): Action["value"] | undefined;
+    askQuestionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary) & { value: never; }, Type extends Actions["type"], Action extends Actions & { type: Type; }>(contextName: Name, questionType: Type, payload: Action["payload"], value?: Action["value"]): Action["value"] | undefined;
+    askQuestionWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary) & { value: never; }, Type extends (Actions & { payload?: never; })["type"], Action extends Actions & { type: Type; }>(contextName: Name, questionType: Type, payload?: undefined, value?: Action["value"]): Action["value"] | undefined;
     /** Ask a questionary (of one question with many answers) in the context.
      * - You get the answers synchronously by the return value (comes from all the answerers).
      * - If there's no answerers, or no context found, then returns an empty array.
      * - Note that asking a questionary also modifies the original question by adding .value and .values into it.
      *   .. If any answered, the last answer be found as .value. (If none, .value is not added.) */
     askQuestionary<Name extends keyof AllContexts & string, Action extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary)>(contextName: Name, question: Action & { value?: Action["value"]; }, maxAnswers?: number): Action["value"][];
+    askQuestionaryWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary) & { value: never; }, Type extends Actions["type"], Action extends Actions & { type: Type; }>(contextName: Name, questionType: Type, payload: Action["payload"], maxAnswers?: number): Action["value"][];
+    askQuestionaryWith<Name extends keyof AllContexts & string, Actions extends AllContexts[Name]["Actions"] & (UIQuestion | UIQuestionary) & { value: never; }, Type extends (Actions & { payload?: never; })["type"], Action extends Actions & { type: Type; }>(contextName: Name, questionType: Type, payload?: undefined, maxAnswers?: number): Action["value"][];
+
 
     // - Mangle contexts - //
 
@@ -543,7 +545,7 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
         Params extends any[] = any[],
         Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps,
         Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps
-    >(funcOrClass: UIComponent<MixedProps>, builderOrProps: Builder | WiredProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
+    >(component: UIComponent<MixedProps>, builderOrProps: Builder | WiredProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
 
 
     // - Assignable by extending class - //
@@ -554,12 +556,13 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     render(): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
 
     // Contextual executors.
+    /** Override this with the actual method to build the context for this particular component. */
+    buildRemote?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): Remote;
     /** Override this to listen to actions - originated by sendAction call on the context. */
     uponAction?<Name extends keyof AllContexts & string, Context extends AllContexts[Name]>(action: Context["Actions"], context: Context, name: Name): void;
     /** Override this to answer to questions - asked by askQuestion call on the context. */
     uponQuestion?<Name extends keyof AllContexts & string, Context extends AllContexts[Name], Action extends Context["Actions"] & UIQuestion<Action["value"]>>(action: Action, context: Context, name: Name): Action["value"];
-    /** Override this with the actual method to build the context for this particular component. */
-    buildRemote?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): Remote;
+    /** Listen to when context assignments change. */
     onContextChange?<Name extends keyof AllContexts & string>(name: Name, newContext: AllContexts[Name] | null, oldContext: AllContexts[Name] | null): boolean | null;
 
     // Component life cycle.
@@ -584,8 +587,11 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 
 // - The class and create shortcut - //
 
-// The declaration of this has some problems: many nevers.
-// .. We don't really need the declaration for this class. Can it be avoided somehow?
+// export declare class UILive<Props extends Dictionary = {}> extends _UILiveMixin(Object) {
+//     // Needed for TSX.
+//     constructor(props: Props, boundary?: UISourceBoundary);
+// }
+
 export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
     // We need a constructor here for typescript TSX.
     constructor(props: Props, ...args: any[]) {

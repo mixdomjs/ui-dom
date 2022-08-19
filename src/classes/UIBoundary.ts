@@ -311,7 +311,7 @@ export class UISourceBoundary extends UIBaseBoundary {
             if (Live) {
                 // Content and context api.
                 this.contentApi = new UIContentApi(readChildren);
-                this.contextApi = new UIContextApi(this as UILiveSource);
+                this.contextApi = new UIContextApi(this as UILiveBoundary);
                 // Constructor and assign renderer.
                 this.live = new Live(this._outerDef.props || {}, this);
                 if (renderer)
@@ -320,7 +320,7 @@ export class UISourceBoundary extends UIBaseBoundary {
                 // .. This way, it's all handled and ready, and there's no need to add special checks or do some initial "flushing".
                 if (!this.live.uiBoundary)
                     // We set a readonly value here - it's on purpose: it's only set if wasn't set in the constructor (by not being passed to super).
-                    (this.live as { uiBoundary: UILiveSource }).uiBoundary = this as UILiveSource;
+                    (this.live as { uiBoundary: UILiveBoundary }).uiBoundary = this as UILiveBoundary;
             }
             // Assign one way reading for mini.
             if (Mini) {
@@ -339,7 +339,7 @@ export class UISourceBoundary extends UIBaseBoundary {
                     const Wired = Mini as UIWiredType;
                     Wired.uiBoundaries.add(this);
                     if (Wired.uiWillMount)
-                        Wired.uiWillMount(this as UIMiniSource);
+                        Wired.uiWillMount(this as UIMiniBoundary);
                 }
             }
         }
@@ -419,13 +419,13 @@ export class UISourceBoundary extends UIBaseBoundary {
 
 }
 
-export interface UILiveSource<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}> extends UISourceBoundary {
+export interface UILiveBoundary<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}> extends UISourceBoundary {
     contentApi: UIContentApi;
     contextApi: UIContextApi<AllContexts, Remote>;
     live: UILive<Props, State, Remote, AllContexts, {}>;
 }
 
-export interface UIMiniSource<Props extends Dictionary = {}> extends UISourceBoundary {
+export interface UIMiniBoundary<Props extends Dictionary = {}> extends UISourceBoundary {
     contentApi: UIContentApi;
     mini: UIMini<Props>;
 }

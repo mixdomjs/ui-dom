@@ -2,6 +2,7 @@
 
 // - Imports - //
 
+import { SVGAttributesBy, SVGGraphicalEventAttributes } from "./_SVGTypes";
 import { UIContentBoundary, UISourceBoundary } from "../classes/UIBoundary";
 import { UIContentClosure } from "../classes/UIContentClosure";
 import { UIRef } from "../classes/UIRef";
@@ -9,9 +10,9 @@ import { UISpread } from "../classes/UISpread";
 import { UIMini } from "../classes/UIMini";
 import { UIHost } from "../classes/UIHost";
 import { UILive } from "../classes/UILive";
-import { UIContext, UIContexts } from "../classes/UIContext";
-import { UIElement, UIFragment, UIPortal } from "../classes/UIPseudoClasses";
-import { UIWired, UIWiredType } from "../classes/UIWired";
+import { UIContext, UIContexts, UIContextsProps } from "../classes/UIContext";
+import { UIElement, UIFragment, UIPortal, UIElementProps, UIPortalProps } from "../classes/UIPseudoClasses";
+import { UIWiredType } from "../classes/UIWired";
 
 
 // - General - //
@@ -41,19 +42,38 @@ export type NonDictionary = Array<any> | Set<any> | Map<any, any>;
 
 // - Html - //
 
+export interface CSSProperties extends Partial<Omit<CSSStyleDeclaration, "item" | "getPropertyPriority" | "getPropertyValue" | "removeProperty" | "setProperty">> {
+    [index: number]: never;
+}
+
 export type HTMLTags = keyof HTMLElementTagNameMap;
 export type HTMLElementType<Type extends HTMLTags = HTMLTags> = HTMLElementTagNameMap[Type];
-export type HTMLAttributesAll<Type extends HTMLTags = HTMLTags> = Record<keyof HTMLElementType<Type>, HTMLElementType<Type>[keyof HTMLElementType]>;
-export type HTMLAttributes<Type extends HTMLTags = HTMLTags> = Partial<HTMLAttributesAll<Type>>;
-export type HTMLAttributesWithStyle<Type extends HTMLTags = HTMLTags> = HTMLAttributes<Type> & { style?: CSSProperties | string; };
-export type CSSProperties = Partial<CSSStyleDeclaration>;
+export type SVGTags = keyof SVGElementTagNameMap;
+export type SVGElementType<Type extends SVGTags = SVGTags> = SVGElementTagNameMap[Type];
+export type DomTags = HTMLTags | SVGTags;
 
 export type DomElement = HTMLElement | SVGElement;
-export type UIHTMLProps<Type extends HTMLTags = HTMLTags, T = {}> = { class?: string; className?: string; style?: CSSProperties | string; } & HTMLAttributes<Type> & HTMLListenerAttributes & T;
-export type UIHTMLPostProps<Props = {}> = Props & { class?: string; style?: CSSProperties; };
+export type UIDomElementProps = {
+    // For anything.
+    key: any;
+    ref: UIRef | UIRef[];
+    // Only for elements.
+    data: Dictionary;
+    class: string;
+    className: string;
+    style: string | CSSProperties;
+};
 
-export interface HTMLListenerAttributesAll {
+export type ListenerAttributeNames = keyof ListenerAttributesAll;
+export type ListenerAttributes = { [Name in keyof ListenerAttributesAll]?: ListenerAttributesAll[Name] | null; };
+export type HTMLAttributes<Type extends HTMLTags = HTMLTags> = Partial<Omit<HTMLElementType<Type>, "style" | "class" | "className" | "textContent" | "innerHTML" | "outerHTML" | "outerText" | "innerText">> & Partial<ListenerAttributesAll> & Partial<UIDomElementProps>;
+export type SVGAttributes<Type extends SVGTags = SVGTags> = Omit<SVGAttributesBy[Type], "style" | "class" | "className"> & Partial<ListenerAttributesAll> & Partial<UIDomElementProps>;
+export type HTMLSVGAttributes<Type extends DomTags = DomTags, Other = never> = [Type] extends [HTMLTags] ? HTMLAttributes<Type> : [Type] extends [SVGTags] ? SVGAttributes<Type> : Other;
+export type HTMLSVGAttributesBy = { [Tag in DomTags]: HTMLSVGAttributes<Tag> };
+
+export interface ListenerAttributesAll {
     onAbort: GlobalEventHandlers["onabort"];
+    onActivate: SVGGraphicalEventAttributes["onActivate"];
     onAnimationCancel: GlobalEventHandlers["onanimationcancel"];
     onAnimationEnd: GlobalEventHandlers["onanimationend"];
     onAnimationIteration: GlobalEventHandlers["onanimationiteration"];
@@ -82,6 +102,8 @@ export interface HTMLListenerAttributesAll {
     onEnded: GlobalEventHandlers["onended"];
     onError: GlobalEventHandlers["onerror"];
     onFocus: GlobalEventHandlers["onfocus"];
+    onFocusIn: SVGGraphicalEventAttributes["onFocusIn"];
+    onFocusOut: SVGGraphicalEventAttributes["onFocusOut"];
     onGotPointerCapture: GlobalEventHandlers["ongotpointercapture"];
     onInput: GlobalEventHandlers["oninput"];
     onInvalid: GlobalEventHandlers["oninvalid"];
@@ -140,8 +162,7 @@ export interface HTMLListenerAttributesAll {
     onWaiting: GlobalEventHandlers["onwaiting"];
     onWheel: GlobalEventHandlers["onwheel"];
 }
-export type HTMLListenerAttributeNames = keyof HTMLListenerAttributesAll;
-export type HTMLListenerAttributes = { [Name in keyof HTMLListenerAttributesAll]?: HTMLListenerAttributesAll[Name] | null; };
+
 
 /** Type for className input.
  * - Represents what can be fed into the uiDom.classNames method with (ValidName extends string):
@@ -161,16 +182,6 @@ export type UIPreClassName<Valid extends string = string, Single extends string 
 // <-- Let's not allow deep anymore, it also messes with arrays and the <Single>. So dropping the recursion: | Array<UIPreClassName<Valid, Single>> | Set<UIPreClassName<Valid, Single>>;
 
 
-// - Tags - //
-
-export type UIDomTag = keyof HTMLElementTagNameMap | keyof SVGElementTagNameMap;
-export type UIBoundaryTag = typeof UILive | typeof UIWired | UIFunction;
-export type UIPreTag = typeof UIFragment | typeof UIContexts | typeof UIElement | typeof UIPortal | UIDomTag | UIBoundaryTag;
-export type UIPostTag = "" | "_" | UIDomTag | UIBoundaryTag | null;
-/** This tag conversion is used for internal tag based def mapping. The UIDefTarget is the uiDom.ContentPass. */
-export type UIDefKeyTag = UIPostTag | UIDefTarget | typeof UIFragment | UIHost;
-
-
 // - Component & Boundary - //
 
 export type UIMiniFunction<Props = {}> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
@@ -187,10 +198,22 @@ export type UIBoundable<Props = {}> = typeof UILive<Props> | typeof UIMini<Props
 /** This is a shortcut for all valid UIDom renderers:
  * - Either based on UILive class/mixin (including UISpread), or UIMini (including UIWired), or
  * - Is a function: UILiveFunction | UIMiniFunction | UISpreadFunction (before conversion). */
-export type UIComponent<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | UIWiredType<Props> | typeof UISpread<Props> | UIBoundableFunction<Props>;
+export type UIComponent<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | UIWiredType<Props> | typeof UISpread<Props> | UIFunction<Props>; // UIBoundableFunction<Props>;
 
 export type UIBoundary = UISourceBoundary | UIContentBoundary;
 export type UISourceBoundaryId = string;
+
+
+// - Tags - //
+
+export type UIDomTag = DomTags;
+export type UIPseudoTag<Props = {}> = typeof UIFragment<Props> | ([Props] extends [UIContextsProps] ? typeof UIContexts<{}, Props> : never) | ([Props] extends [UIElementProps] ? typeof UIElement<HTMLTags | SVGTags, Props> : never) | ([Props] extends [UIPortalProps] ? typeof UIPortal<Props> : never);
+// export type UIComponentTag<Props = {}> = UIComponent<Props>;
+export type UIComponentTag<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | typeof UISpread<Props> | UIWiredType<Props> | UIPseudoTag<Props> | UIFunction<Props>;
+export type UIPreTag = UIDomTag | UIPseudoTag | UIComponentTag;
+export type UIPostTag = "" | "_" | UIDomTag | UIComponentTag | null;
+/** This tag conversion is used for internal tag based def mapping. The UIDefTarget is the uiDom.ContentPass. */
+export type UIDefKeyTag = UIPostTag | UIDefTarget | typeof UIFragment | UIHost;
 
 
 // - Contextual - //
@@ -272,16 +295,20 @@ export type UIProps<T = {}> = {
     key?: any;
     /** Attach one or many forwarded refs. */
     ref?: UIRef | UIRef[];
+} & T;
+export type UIComponentProps<T = {}> = UIProps<T> & {
     /** Attach named contexts on a child - will not cascade down. */
     contexts?: Record<string, UIContext | null>;
-} & T;
-export type UIGenericProps<T = {}> = UIProps<T> & {
+}
+export type UIDomProps<T = {}> = UIProps<T> & {
     class?: string;
     className?: string;
     style?: CSSProperties | string;
+    data?: Dictionary;
 } & T;
+export type UIGenericProps<Type extends DomTags = DomTags, T = {}> = UIDomProps & HTMLSVGAttributes<Type, {}> & ListenerAttributes & T;
 /** Post props don't contain key, ref. In addition className and class have been merged, and style processed to a dictionary. */
-export type UIGenericPostProps<Props = {}> = Props & { class?: string; style?: CSSProperties; };
+export type UIGenericPostProps<Props = {}> = Props & { className?: string; style?: CSSProperties; data?: Dictionary; };
 
 
 // - Render output types - //
@@ -332,15 +359,18 @@ export interface UIUpdateCompareModesBy {
 
 // - Html diffs - //
 
-/** Differences made to a dom element.
- * Note that this never includes tag changes, because that requires creating a new element. */
+/** Differences made to a dom element. Note that this never includes tag changes, because it requires creating a new element. */
 export interface UIHTMLDiffs {
-    /** If value is undefined means removed. */
-    attrDiffs?: Dictionary;
-    /** If value is undefined means removed. */
-    styleDiffs?: CSSProperties;
-    /** The keys are class names. For each, if true class name was added, if false name was removed. */
-    classDiffs?: Record<string, boolean>;
+    /** If no attributes, no changes in general attributes. If value in the dictionary is undefined means removed. */
+    attributes?: Dictionary;
+    /** If no listeners, no changes in listeners. If value in the dictionary is undefined means removed. */
+    listeners?: Dictionary;
+    /** If no style, no changes in styles. If value in the dictionary is undefined means removed. */
+    style?: CSSProperties;
+    /** If no data, no changes in data attribute. If value in the dictionary is undefined means removed. */
+    data?: Dictionary;
+    /** If no classNames, no changes in class names. The keys are class names: for each, if true class name was added, if false name was removed. */
+    classNames?: Record<string, boolean>;
 }
 
 
@@ -490,7 +520,7 @@ export interface UIDefPortal<Props extends UIGenericPostProps = UIGenericPostPro
 }
 export interface UIDefBoundary<Props extends UIGenericPostProps = UIGenericPostProps> extends UIDefBase<Props> {
     _uiDefType: "boundary";
-    tag: UIBoundaryTag;
+    tag: UIComponentTag;
     props: Props;
 }
 export interface UIDefFragment extends UIDefBase {
@@ -588,7 +618,7 @@ export interface UITreeNodeDom extends UITreeNodeBaseWithDef {
      * Note. Like React, we do not want to read the state of the dom element due to 2 reasons:
      *   1. Reading from dom element is relatively slow (in comparison to reading property of an object).
      *   2. It's actually better for outside purposes that we only take care of our own changes to dom - not forcing things there (except create / destroy our own). */
-    domProps: UIHTMLPostProps;
+    domProps: UIGenericPostProps;
 };
 export interface UITreeNodePortal extends UITreeNodeBaseWithDef {
     type: "portal";
@@ -684,7 +714,7 @@ export interface UIHostSettings {
      *     * However, you won't have dom elements on mount. To know when that happens should use refs and .domDidMount and .domWillUnmount callbacks. */
     uiDidImmediateCalls: boolean;
 
-    /** Whether should call .domRefDidMove in the case, that didn't need to actually move the element, although index was changed. */
+    /** Whether should call .domDidMove in the case, that didn't need to actually move the element, although index was changed. */
     callRefMoveEvenIfNoDomMove: boolean;
 
     /** If the internal should update check is called without any types to update with, this decides whether should update or not. Defaults to false. */
@@ -701,14 +731,14 @@ export interface UIHostSettings {
     /** Whether does a equalDomProps check on the updating process.
      * - If true: Only adds render info (for updating dom props) if there's a need for it.
      * - If false: Always adds render info for updating dom elements. They will be diffed anyhow.
-     * - If "if-needed": Then marks to be updated if had other rendering needs (move or content), if not then does equalDomProps check.
+     * - If "if-needed": Then marks to be updated if had other rendering needs (move or content), if didn't then does equalDomProps check. (So that if no need, don't mark render updates at all.)
      * Note that there is always a diffing check before applying dom changes, and the process only applies changes from last set.
      * .. In other words, this does not change at all what gets applied to the dom.
      * .. The only thing this changes, is whether includes an extra equalDomProps -> boolean run during the update process.
      * .. In terms of assumed performance:
      * .... Even though equalDomProps is an extra process, it's a bit faster to run than collecting diffs and in addition it can stop short - never add render info.
      * .... However, the only time it stops short is for not-equal, in which case it also means that we will anyway do the diff collection run later on.
-     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is true. */
+     * .... In other words, it's in practice a matter of taste: if you want clean renderinfos (for debugging) use true. The default is "if-needed". */
     preEqualCheckDomProps: boolean | "if-needed";
 
     /** The maximum number of times a boundary is allowed to be render during an update due to update calls during the render func.

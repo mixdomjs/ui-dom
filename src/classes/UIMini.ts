@@ -62,6 +62,21 @@ export interface UIMini<Props extends Dictionary = {}> {
      *   .. Accordingly children are not part of the .uiShouldUpdate(prevProps, nextProps). */
     updateMode: UIUpdateCompareMode | null;
 
+
+    // - Methods that are set by the boundary - //
+
+    /** Set the update mode for this particular renderer instance.
+     * - If null uses settings.updateMiniMode from uiHost.
+     * - Note that you can also assign the .uiShouldUpdate method to affect this. */
+    setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
+
+    /** Whether the component has mounted or not. */
+    isMounted(): boolean;
+
+    /** The renderer will be assigned here. */
+    render(props: Props): UIRenderOutput | UIMiniFunction<Props>;
+
+
     // - Methods - //
 
     /** Get the actual contentPass childDefs. If used will mark needsChildren temporarily (until next render).
@@ -77,9 +92,12 @@ export interface UIMini<Props extends Dictionary = {}> {
      * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
     needsChildren(needs?: boolean | "temp" | null): void;
 
+
     // - Callbacks - //
 
     // Component life cycle.
+    uiDidMount?(): void;
+    uiDidMove?(): void;
     /** This is a callback that will always be called when the component is checked for updates.
      * - Note that this is not called on mount, but will be called everytime on update, even if will not actually update (use the 3rd param).
      * - Note that this will be called after uiShouldUpdate (if that is called) and right before the update happens.
@@ -92,8 +110,6 @@ export interface UIMini<Props extends Dictionary = {}> {
      * - Note that this is called right before uiBeforeUpdate and the actual update (if that happens).
      * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
     uiShouldUpdate?(prevProps: Props | null, newProps: Props | null): boolean | null;
-    uiDidMount?(): void;
-    uiDidMove?(): void;
     uiDidUpdate?(prevProps: Props | null, newProps: Props | null): void;
     uiWillUnmount?(): void;
 
@@ -106,21 +122,17 @@ export interface UIMini<Props extends Dictionary = {}> {
     // <-- Dropped. Because, then would like the full life cycle, too.
     // ... And then should just make UILive extend UIMini and fatten the shouldUpdate { props, children } and unify contextApi usage.
 
-    // - Methods that are set by the boundary - //
-
-    /** Whether the component has mounted or not. */
-    isMounted(): boolean;
-
-    /** Set the update mode for this particular renderer instance.
-     * - If null uses settings.updateMiniMode from uiHost.
-     * - Note that you can also assign the .shouldUpdate method to affect this. */
-    setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
-
-    /** The renderer will be assigned here. */
-    render(_props: Props): UIRenderOutput | UIMiniFunction<Props>;
 
 }
-export class UIMini<Props extends Dictionary = {}> extends _UIMiniMixin(Object) { }
+// export declare class UIMini<Props extends Dictionary = {}> extends _UIMiniMixin(Object) {
+//     // Needed for TSX.
+//     constructor(props: Props, updateMode?: UIUpdateCompareMode | null);
+// }
+
+export class UIMini<Props extends Dictionary = {}> extends _UIMiniMixin(Object) {
+    // Needed for TSX.
+    constructor(props: Props, updateMode: UIUpdateCompareMode | null = null) { super(props, updateMode); }
+}
 
 export const createMini = <Props extends Dictionary = {}>( func: (mini: UIMini<Props>, props: Props) => ReturnType<UIMiniFunction<Props>>): UIMiniFunction<Props> =>
     function(props) { return func(this, props); };

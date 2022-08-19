@@ -6,10 +6,9 @@ import {
     Dictionary,
     RecordableType,
     CSSProperties,
-    UIHTMLPostProps,
     UIGenericPostProps,
     UIPreClassName,
-    UIGenericProps,
+    UIDomProps,
 } from "./_Types";
 
 
@@ -17,6 +16,11 @@ import {
 
 export const _Lib = {
 
+
+    COMPLEX_DOM_PROPS: {
+        style: true,
+        data: true
+    },
 
     // - General tools - //
 
@@ -81,13 +85,13 @@ export const _Lib = {
 
     // - Html props - //
 
-    cleanHtmlProps<Props extends UIGenericProps = {}>(origProps: Props, copy?: boolean): UIGenericPostProps<Props> {
+    cleanHtmlProps<Props extends UIDomProps = {}>(origProps: Props, copy?: boolean): UIGenericPostProps<Props> {
         // Copy.
         const props = copy ? { ...origProps } : origProps;
         // Class.
-        if (props.className)
-            props.class = props.class ? props.class + " " + props.className : props.className;
-        delete props.className;
+        if (props.class)
+            props.className = props.className ? props.class + " " + props.className : props.class;
+        delete props.class;
         // Style.
         if (typeof props.style === "string")
             props.style = _Lib.cleanHtmlStyle(props.style);
@@ -208,65 +212,67 @@ export const _Lib = {
         return did !== null ? diffs : null;
     },
 
-	getDictionaryDiffs<T extends Dictionary>(orig: Partial<T>, update: Partial<T>, skipProps?: Array<keyof T>): Partial<T> | null {
+    getDictionaryDiffs<T extends Dictionary>(orig: Partial<T>, update: Partial<T>): Partial<T> | null {
         // Collect.
         const diffs: Partial<T> = {};
+        let hasDiffs = false;
         // .. Deleted.
         for (const prop in orig) {
             const origValue = orig[prop];
-            if (origValue !== undefined && update[prop] === undefined)
+            if (origValue !== undefined && update[prop] === undefined) {
                 diffs[prop] = undefined;
+                hasDiffs = true;
+            }
 	    }
         // .. Added or changed.
         for (const prop in update) {
             const newValue = update[prop];
-            if (orig[prop] !== newValue)
+            if (orig[prop] !== newValue) {
                 diffs[prop] = newValue;
+                hasDiffs = true;
+            }
         }
-        // Skip props.
-        if (skipProps)
-            for (const prop of skipProps)
-                delete diffs[prop];
-        // Return diffs if has - or null otherwise.
-        for (const _prop in diffs)
-            return diffs;
-        return null;
+        return hasDiffs ? diffs : null;
     },
 
     /** Inlined comparison method specialized into domProps (attributes of a dom element). */
-    equalDomProps(a: UIHTMLPostProps, b: UIHTMLPostProps): boolean {
-        // Handle style.
-        // .. At least a has style.
-        if (a.style) {
-            // But b has no style.
-            if (!b.style)
+    equalDomProps(a: UIGenericPostProps, b: UIGenericPostProps): boolean {
+        // Handle complex properties.
+        for (const prop in _Lib.COMPLEX_DOM_PROPS) {
+            // .. At least a has the complex prop.
+            if (a[prop]) {
+                // But b has no the complex prop.
+                if (!b[prop])
+                    return false;
+                // Compare complex data (as shallow dictionaries).
+                const aData = a[prop];
+                const bData = b[prop];
+                // .. Added or changed.
+                if (aData !== bData) {
+            		for (const prop in bData) {
+            			if (aData[prop] !== bData[prop])
+            				return false;
+            		}
+                    // .. Deleted.
+            		for (const prop in aData) {
+            			if (bData[prop] === undefined && aData[prop] !== undefined)
+            				return false;
+            		}
+                }
+            }
+            // .. Only b has style.
+            else if (b[prop])
                 return false;
-            // Compare styles (ignore root identity check).
-            const aStyle = a.style;
-            const bStyle = b.style;
-            // .. Added or changed.
-    		for (const prop in bStyle) {
-    			if (aStyle[prop] !== bStyle[prop])
-    				return false;
-    		}
-            // .. Deleted.
-    		for (const prop in aStyle) {
-    			if (bStyle[prop] === undefined && aStyle[prop] !== undefined)
-    				return false;
-    		}
         }
-        // .. Only b has style.
-        else if (b.style)
-            return false;
         // All else.
         // .. Added or changed.
         for (const prop in b) {
-            if (a[prop] !== b[prop] && prop !== "style")
+            if (a[prop] !== b[prop] && !_Lib.COMPLEX_DOM_PROPS[prop])
                 return false;
         }
         // .. Deleted.
         for (const prop in a) {
-            if (b[prop] === undefined && a[prop] !== undefined && prop !== "style")
+            if (b[prop] === undefined && a[prop] !== undefined && !_Lib.COMPLEX_DOM_PROPS[prop])
                 return false;
         }
         return true;

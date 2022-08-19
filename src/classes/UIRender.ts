@@ -3,12 +3,12 @@
 
 import {
     DomElement,
-    HTMLListenerAttributeNames,
+    ListenerAttributeNames,
     UITreeNode,
     UITreeNodeDom,
     UITreeNodeType,
     UIHTMLDiffs,
-    UIHTMLPostProps,
+    UIGenericPostProps,
     UIHostSettings,
     UIContentValue,
     UIDomRenderInfo,
@@ -384,10 +384,10 @@ export class UIRender {
                 // For dom nodes.
                 if (treeNode.type === "dom" && treeNode.domNode && treeNode.domNode instanceof Element) {
                     // Modify dom props.
-                    const { appliedProps, ...diffs } = UIRender.domApplyProps(treeNode, this.settings.devLogWarnings);
+                    const [ appliedProps, diffs ] = UIRender.domApplyProps(treeNode, this.settings.devLogWarnings);
                     treeNode.domProps = appliedProps;
                     // Call update.
-                    if (renderInfo.update) {
+                    if (diffs && renderInfo.update) {
                         const attachedRefs = treeNode.def.attachedRefs;
                         if (attachedRefs) {
                             for (const attachedRef of attachedRefs)
@@ -484,10 +484,10 @@ export class UIRender {
 
     // - Static - //
 
-    static IGNORE_PROPS = { innerHTML: true, textContent: true }
+    static IGNORE_PROPS: Record<string, "other" | "render" | undefined> = { innerHTML: "render", outerHTML: "render", textContent: "render", innerText: "render", outerText: "render", style: "other", data: "other", className: "other" };
     static PASSING_TYPES: Partial<Record<UITreeNodeType, true>> = { boundary: true, pass: true, contexts: true, host: true };
     static LISTENER_PROPS = [
-    "Abort","AnimationCancel","AnimationEnd","AnimationIteration","AnimationStart","AuxClick","Blur","CanPlay","CanPlayThrough","Change","Click","Close","ContextMenu","CueChange","DblClick","Drag","DragEnd","DragEnter","DragLeave","DragOver","DragStart","Drop","DurationChange","Emptied","Ended","Error","Focus","GotPointerCapture","Input","Invalid","KeyDown","KeyPress","KeyUp","Load","LoadedData","LoadedMetaData","LoadStart","LostPointerCapture","MouseDown","MouseEnter","MouseLeave","MouseMove","MouseOut","MouseOver","MouseUp","Pause","Play","Playing","PointerCancel","PointerDown","PointerEnter","PointerLeave","PointerMove","PointerOut","PointerOver","PointerUp","Progress","RateChange","Reset","Resize","Scroll","SecurityPolicyViolation","Seeked","Seeking","Select","Stalled","Submit","Suspend","TimeUpdate","Toggle","TouchCancel","TouchEnd","TouchMove","TouchStart","TransitionCancel","TransitionEnd","TransitionRun","TransitionStart","VolumeChange","Waiting","Wheel"].reduce((acc,curr) => (acc["on" + curr]=curr.toLowerCase(),acc), {}) as Record<HTMLListenerAttributeNames, (e: Event) => void>;
+    "Abort","Activate","AnimationCancel","AnimationEnd","AnimationIteration","AnimationStart","AuxClick","Blur","CanPlay","CanPlayThrough","Change","Click","Close","ContextMenu","CueChange","DblClick","Drag","DragEnd","DragEnter","DragLeave","DragOver","DragStart","Drop","DurationChange","Emptied","Ended","Error","Focus","FocusIn","FocusOut","GotPointerCapture","Input","Invalid","KeyDown","KeyPress","KeyUp","Load","LoadedData","LoadedMetaData","LoadStart","LostPointerCapture","MouseDown","MouseEnter","MouseLeave","MouseMove","MouseOut","MouseOver","MouseUp","Pause","Play","Playing","PointerCancel","PointerDown","PointerEnter","PointerLeave","PointerMove","PointerOut","PointerOver","PointerUp","Progress","RateChange","Reset","Resize","Scroll","SecurityPolicyViolation","Seeked","Seeking","Select","Stalled","Submit","Suspend","TimeUpdate","Toggle","TouchCancel","TouchEnd","TouchMove","TouchStart","TransitionCancel","TransitionEnd","TransitionRun","TransitionStart","VolumeChange","Waiting","Wheel"].reduce((acc,curr) => (acc["on" + curr]=curr.toLowerCase(),acc), {}) as Record<ListenerAttributeNames, (e: Event) => void>;
 
     static findInsertionNodes(treeNode: UITreeNode): [ Node, Node | null ] | [ null, null ] {
 
@@ -640,9 +640,9 @@ export class UIRender {
         }
     }
 
-    static readFromDom(domNode: HTMLElement | SVGElement | Node): UIHTMLPostProps {
+    static readFromDom(domNode: HTMLElement | SVGElement | Node): UIGenericPostProps {
         // Prepare.
-        const domProps: UIHTMLPostProps = {};
+        const domProps: UIGenericPostProps = {};
         if (!(domNode instanceof Element))
             return domProps;
         // Attributes, including className as class.
@@ -672,90 +672,111 @@ export class UIRender {
     // }
     // <-- Unused.
 
-    /** Apply properties to dom elements for the given treeNode. */
-    static domApplyProps(treeNode: UITreeNodeDom, logWarnings: boolean = false): UIHTMLDiffs & { appliedProps: UIHTMLPostProps } {
+    /** Apply properties to dom elements for the given treeNode. Returns [ appliedProps, diffs? ]. */
+    static domApplyProps(treeNode: UITreeNodeDom, logWarnings: boolean = false): [ UIGenericPostProps, UIHTMLDiffs? ] {
+
         // Parse.
         const domElement = treeNode.domNode as DomElement | null;
-        const nextProps = treeNode.def.props || {};
-        const appliedDomProps = treeNode.domProps || {};
-		// Collect style and attribute diffs.
-        const appliedProps: UIHTMLPostProps = {};
-        const info: UIHTMLDiffs & { appliedProps: UIHTMLPostProps } = { appliedProps };
+        const appliedProps: UIGenericPostProps = {};
         if (!domElement)
-            return info;
-        // .. Attributes & listeners.
-        const attrDiffs = _Lib.getDictionaryDiffs(appliedDomProps, nextProps, ["style", "class"]);
-        if (attrDiffs) {
-            info.attrDiffs = attrDiffs;
-            for (const prop in attrDiffs) {
-                // Prepare.
-                const val = attrDiffs[prop];
-                const hasValue = val !== undefined;
-                const listenerProp = UIRender.LISTENER_PROPS[prop];
-                // Ignore case.
-                if (UIRender.IGNORE_PROPS[prop]) {
+            return [ appliedProps ];
+
+        // Collect all.
+        const oldProps = treeNode.domProps || {};
+        const nextProps = treeNode.def.props || {};
+        const allDiffs = _Lib.getDictionaryDiffs(oldProps, nextProps);
+        if (!allDiffs)
+            return [ nextProps ];
+
+        // Loop all.
+        const diffs: UIHTMLDiffs = {};
+        for (const prop in allDiffs) {
+
+            // Special cases.
+            if (UIRender.IGNORE_PROPS[prop]) {
+                // Not renderable.
+                if (UIRender.IGNORE_PROPS[prop] === "render") {
                     if (logWarnings)
                         console.warn("__UIRender.domApplyProps: Warning: Is using an ignored dom prop: ", prop, " for treeNode: ", treeNode);
-                    // Should maybe log warning.
-                    continue;
                 }
-                // Listener.
-                if (listenerProp) {
-                    // Remove old, if had.
-                    const oldListener = appliedDomProps[prop];
-                    if (oldListener)
-                        domElement.removeEventListener(listenerProp, oldListener);
-                    // Add new.
-                    if (hasValue)
-                        domElement.addEventListener(listenerProp, val);
-                }
-                // Normal case - set/remove attribute.
-                else
-                    hasValue ? domElement.setAttribute(prop, val) : domElement.removeAttribute(prop);
-                // Bookkeeping.
-                hasValue ? appliedProps[prop] = val : delete appliedProps[prop];
-            }
-        }
-        // .. Styles.
-        // .... Note that we respect external changes - we only modify our own.
-        const styleDiffs = appliedDomProps.style || nextProps.style ? _Lib.getDictionaryDiffs(appliedDomProps.style || {}, nextProps.style || {}) : null;
-        if (styleDiffs) {
-            // Prepare bookkeeping.
-            info.styleDiffs = styleDiffs;
-            if (!appliedProps.style)
-                appliedProps.style = {};
-            // Loop styles.
-            // .. Note that using element.style[prop] we support both ways: "padding-top" and "paddingTop".
-            // .. However, our diffing assumes props in "paddingTop" way when using object style - it won't try to convert.
-            for (const prop in styleDiffs) {
-                // Parse.
-                const val = styleDiffs[prop];
-                // Remove.
-                if (val == null) {
-                    domElement.style[prop] = ""; // To clear off this way, cannot use undefined - won't have any effect.
-                    delete appliedProps.style[prop];
-                }
-                // Add / Change.
+                // Specialities: className, style and data.
                 else {
-                    domElement.style[prop] = val;
-                    appliedProps.style[prop] = val;
+                    // Classname.
+                    if (prop === "className") {
+                        const classDiffs = _Lib.getClassNameDiffs(oldProps.className, nextProps.className);
+                        if (classDiffs) {
+                            // Diffs.
+                            diffs.classNames = classDiffs;
+                            // Apply.
+                            for (const name in classDiffs)
+                                domElement.classList[classDiffs[name] ? "add" : "remove"](name);
+                            // Bookkeeping.
+                            nextProps.className ? appliedProps.className = nextProps.className : delete appliedProps.className;
+                        }
+                    }
+                    // The prop is "style" or "data".
+                    else {
+                        // Get diffs.
+                        const nextVal = nextProps[prop];
+                        const diffs = _Lib.getDictionaryDiffs(oldProps[prop] || {}, nextVal || {});
+                        if (diffs) {
+                            // Diffs.
+                            diffs[prop] = diffs;
+                            // Apply.
+                            if (prop === "data") {
+                                for (const subProp in diffs)
+                                    diffs[subProp] !== undefined ? domElement.dataset[subProp] = diffs[subProp] : delete domElement.dataset[subProp];
+                            }
+                            // For styles, we use the very flexible element.style[prop] = value. If value is null, then will remove.
+                            // .. This way, we support both ways to input styles: "backgroundColor" and "background-color".
+                            else
+                                for (const subProp in diffs)
+                                    domElement.style[subProp] = diffs[subProp] != null ? diffs[subProp] : null;
+                            // Bookkeeping.
+                            nextVal ? appliedProps[prop] = nextVal : delete appliedProps[prop];
+                        }
+                    }
                 }
+                // Skip in any case.
+                continue;
             }
-        }
-        // .. Class names.
-        const classDiffs = appliedDomProps.class !== (nextProps.class || undefined) ? _Lib.getClassNameDiffs(appliedDomProps.class, nextProps.class) : null;
-        if (classDiffs) {
-            info.classDiffs = classDiffs;
-            for (const name in classDiffs) {
-                if (classDiffs[name])
-                    domElement.classList.add(name);
-                else
-                    domElement.classList.remove(name);
+            // Prepare.
+            const val = allDiffs[prop];
+            const hasValue = val !== undefined;
+            const listenerProp = UIRender.LISTENER_PROPS[prop];
+            // Listener.
+            if (listenerProp) {
+                // Diffs.
+                if (!diffs.listeners)
+                    diffs.listeners = {};
+                diffs.listeners[prop] = val;
+                // Remove old, if had.
+                const oldListener = oldProps[prop];
+                if (oldListener)
+                    domElement.removeEventListener(listenerProp, oldListener);
+                // Add new.
+                if (hasValue)
+                    domElement.addEventListener(listenerProp, val);
             }
-            nextProps.class ? appliedProps.class = nextProps.class : delete appliedProps.class;
+            // Normal case - set/remove attribute.
+            // .. Note, the value will be stringified automatically.
+            else {
+                // Diffs.
+                if (!diffs.attributes)
+                    diffs.attributes = {};
+                diffs.attributes[prop] = val;
+                // Apply.
+                hasValue ? domElement.setAttribute(prop, val) : domElement.removeAttribute(prop);
+            }
+            // Bookkeeping.
+            hasValue ? appliedProps[prop] = val : delete appliedProps[prop];
         }
+
         // Return info for the actually applied situation as well as diffs for each type.
-        return info;
+        for (const _prop in diffs)
+            return [ appliedProps, diffs ];
+        // No diffs.
+        return [ appliedProps ];
     }
 
 }

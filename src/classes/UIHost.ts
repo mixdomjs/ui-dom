@@ -251,7 +251,7 @@ function _UIHostMixin(Base: ClassType) {
                     remote: "shallow",
                     children: "changed"
                 },
-                preEqualCheckDomProps: true,
+                preEqualCheckDomProps: "if-needed",
                 // Behaviour.
                 onlyRunInContainer: false,
                 welcomeContextsUpRoot: true,

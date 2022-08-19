@@ -13,7 +13,7 @@ import {
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { _Apply } from "../static/_Apply";
-import { UILiveSource } from "./UIBoundary";
+import { UILiveBoundary } from "./UIBoundary";
 import { UIContext } from "./UIContext";
 
 
@@ -21,7 +21,7 @@ import { UIContext } from "./UIContext";
 
 export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData extends Dictionary = {}> {
 
-    public uiBoundary: UILiveSource<AllContexts, ContextData>;
+    public uiBoundary: UILiveBoundary<AllContexts, ContextData>;
 
     public contextNeeds: Map<string, string[] | boolean>;
     public actionNeeds: Map<string, Set<string> | boolean>;
@@ -32,7 +32,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
      * .... But when using contexts for tunneling, sometimes wants to talkback to parent with actions or share part of the context. */
     public overriddenContexts?: Record<string, UIContext | null>;
 
-    constructor(boundary: UILiveSource<AllContexts, ContextData>) {
+    constructor(boundary: UILiveBoundary<AllContexts, ContextData>) {
         this.uiBoundary = boundary;
         this.actionNeeds = new Map();
         this.contextNeeds = new Map();
