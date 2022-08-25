@@ -62,7 +62,7 @@ function _UIEffectMixin<Memory = any>(Base: ClassType) {
         }
 
         /** Cancel effect. */
-        public cancel(skipUnmount: boolean = false, clearEffect: boolean = false): void {
+        public cancel(skipUnmount: boolean = true, clearEffect: boolean = false): void {
             // Run unmount.
             if (!skipUnmount && this.onUnmount)
                 this.onUnmount(this.memory, this.memory, "cancel");
@@ -76,11 +76,10 @@ function _UIEffectMixin<Memory = any>(Base: ClassType) {
 }
 export interface UIEffect<Memory = any> {
 
+    // Note that the type for Memory is not used elsewhere below.
+    // ... This is to allow more flexible mixin use with redefined memory.
     /** The last store memory. */
     memory: Memory;
-    //
-    // <-- Note that this type is not used elsewhere below.
-    // ... This is to allow more flexible mixin use with redefined memory.
 
     /** The effect to run, when has changed.
      * - If returns a function, will replace the effect after (for the next time). */
@@ -92,16 +91,16 @@ export interface UIEffect<Memory = any> {
     * - If -1 depth, performs fully deep search. If depth <= -2, then is in "always" mode (doesn't even check). */
     depth: number;
 
+    /** Main function for using the effect.
+     * - Compares the memory against the old one and if changed, returns true and runs the effect.
+     * - If newEffectIfChanged provided, overrides the effect (only if was changed) right before calling the effect.
+     * - Note that you don't need to have an effect assigned at all: you can also use the returned boolean and run your "effect" inline. */
+    use(memory: this["memory"], forceRun?: boolean, newEffectIfChanged?: UIEffectOnMount<Memory> | null): boolean;
+
     /** Alias for .use, that requires a function. (Do not use this, if you can reuse a function.)
      * - Note that if you can reuse a function all the time, you should. (There's no point declaring a new one every time in vain.)
      * - Note that you can also call .update(mem), and if it returns true, then do your effect inline.  */
     reset(effect: UIEffectOnMount<Memory> | null, memory: this["memory"], forceRun?: boolean): boolean;
-
-    /** Alias for .useWith with default depth.
-     * - Stores the memory and performs a shallow check against previous and returns true if changed.
-     * - If newEffectIfChanged is not undefined, overrides the effect (only if was changed) right before calling the effect.
-     * - Note that you don't need to have an effect assigned at all: you can also use the returned boolean and run your "effect" inline. */
-    use(memory: this["memory"], forceRun?: boolean, newEffectIfChanged?: UIEffectOnMount<Memory> | null): boolean;
 
     /** Cancel effect. */
     cancel(skipUnmount?: boolean, clearEffect?: boolean): void;

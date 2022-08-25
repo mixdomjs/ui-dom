@@ -148,6 +148,8 @@ export interface UIRef<Type extends Node | UISourceBoundary = Node | UISourceBou
     uiDidMove?(boundary: Type & UISourceBoundary): void;
     uiWillUnmount?(boundary: Type & UISourceBoundary): void;
 
+    // <-- Should we have uiDidUpdate here..?
+
 }
 export class UIRef<Type extends Node | UISourceBoundary = Node | UISourceBoundary> extends _UIRefMixin(Object) {}
 export const createRef = <Type extends Node | UISourceBoundary = Node | UISourceBoundary>() => new UIRef<Type>();

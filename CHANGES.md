@@ -1,3 +1,9 @@
+## v2.3.1
+
+### Changes
+
+- Changed the default value of the first argument for `.cancel(skipUnmount = true, clearEffect = false)` in `UIEffect`. Now it defaults to `true`.
+
 ## v2.3.0
 
 ### Features
