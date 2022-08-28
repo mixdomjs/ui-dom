@@ -32,7 +32,7 @@ import { _Defs } from "./_Defs";
 import { _Find } from "./_Find";
 import { uiContent } from "../uiDom";
 import { UIRender } from "../classes/UIRender";
-import { UIContentBoundary, UISourceBoundary, UILiveBoundary, UIMiniBoundary } from "../classes/UIBoundary";
+import { UIContentBoundary, UISourceBoundary, UILiveBoundary } from "../classes/UIBoundary";
 import { UIRef } from "../classes/UIRef";
 import { UILive } from "../classes/UILive";
 import { UIWiredType } from "../classes/UIWired";
@@ -1341,9 +1341,9 @@ export const _Apply = {
                     // Wired.
                     if (Wired.UI_DOM_TYPE === "Wired") {
                         if (Wired.uiWillUnmount)
-                            Wired.uiWillUnmount(sBoundary as UIMiniBoundary);
+                            Wired.uiWillUnmount(mini);
                         // Remove from wired bookkeeping.
-                        Wired.uiBoundaries.delete(sBoundary);
+                        Wired.components.delete(mini);
                     }
                 }
             }
@@ -1491,7 +1491,7 @@ export const _Apply = {
         // On context change.
         if (boundary.live.onContextChange) {
             const should = boundary.live.onContextChange(name as never, newContext as never, oldContext as never);
-            if (should !== null)
+            if (should != null)
                 changed |= should ? UIContextRefresh.DoRefresh : UIContextRefresh.NoRefresh;
         }
         // Return changed.

@@ -14,6 +14,7 @@ import {
     UIHostSettings,
     UITreeNodeDom,
     UITreeNodeBoundary,
+    UIComponent,
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { _Defs } from "../static/_Defs";
@@ -192,24 +193,24 @@ function _UIHostMixin(Base: ClassType) {
             return this.rootBoundary ? _Find.rootDomTreeNodes(this.rootBoundary.treeNode, inNestedBoundaries, false).map(treeNode => treeNode.domNode) as Node[] : [];
         }
 
-        public queryDomElement<T extends Element = Element>(selectors: string, allowOverHosts: boolean = false): T | null {
-            return _Find.domElementByQuery<T>(this.groundedTree, selectors, true, allowOverHosts);
+        public queryDomElement<T extends Element = Element>(selectors: string, overHosts: boolean = false): T | null {
+            return _Find.domElementByQuery<T>(this.groundedTree, selectors, true, overHosts);
         }
 
-        public queryDomElements<T extends Element = Element>(selectors: string, maxCount: number = 0, allowOverHosts: boolean = false): T[] {
-            return _Find.domElementsByQuery<T>(this.groundedTree, selectors, maxCount, true, allowOverHosts);
+        public queryDomElements<T extends Element = Element>(selectors: string, maxCount: number = 0, overHosts: boolean = false): T[] {
+            return _Find.domElementsByQuery<T>(this.groundedTree, selectors, maxCount, true, overHosts);
         }
 
-        public findDomNodes<T extends Node = Node>(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): T[] {
-            return _Find.treeNodesWithin(this.groundedTree, { dom: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.domNode) as T[];
+        public findDomNodes<T extends Node = Node>(maxCount: number = 0, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): T[] {
+            return _Find.treeNodesWithin(this.groundedTree, { dom: true }, maxCount, true, overHosts, validator).map(tNode => tNode.domNode) as T[];
         }
 
-        public findBoundaries(maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] {
-            return _Find.treeNodesWithin(this.groundedTree, { boundary: true }, maxCount, true, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
+        public findComponents<Component extends UIComponent = UIComponent>(maxCount: number = 0, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Component[] {
+            return _Find.treeNodesWithin(this.groundedTree, { boundary: true }, maxCount, true, overHosts, validator).map(t => (t.boundary && (t.boundary.live || t.boundary.mini)) as unknown as Component);
         }
 
-        public findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount: number = 0, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
-            return _Find.treeNodesWithin(this.groundedTree, types && _Lib.buildRecordable<UITreeNodeType>(types), maxCount, true, allowOverHosts, validator);
+        public findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount: number = 0, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
+            return _Find.treeNodesWithin(this.groundedTree, types && _Lib.buildRecordable<UITreeNodeType>(types), maxCount, true, overHosts, validator);
         }
 
 
@@ -328,15 +329,15 @@ export interface UIHost {
      * - Optionally define whether to search in nested boundaries or not (by default does). */
     getRootDomNodes(inNestedBoundaries?: boolean): Node[];
     /** Get the first dom element by a selectors within the host (like document.querySelector). Should rarely be used, but it's here if needed. */
-    queryDomElement<T extends Element = Element>(selectors: string, allowOverHosts?: boolean): T | null;
+    queryDomElement<T extends Element = Element>(selectors: string, overHosts?: boolean): T | null;
     /** Get dom elements by a selectors within the host (like document.querySelectorAll). Should rarely be used, but it's here if needed. */
-    queryDomElements<T extends Element = Element>(selectors: string, maxCount?: number, allowOverHosts?: boolean): T[];
+    queryDomElements<T extends Element = Element>(selectors: string, maxCount?: number, overHosts?: boolean): T[];
     /** Find all dom nodes by an optional validator. */
-    findDomNodes<T extends Node = Node>(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
-    /** Find all boundaries by an optional validator. */
-    findBoundaries(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
+    findDomNodes<T extends Node = Node>(maxCount?: number, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
+    /** Find all components by an optional validator. */
+    findComponents<Component extends UIComponent = UIComponent>(maxCount?: number, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): Component[];
     /** Find all treeNodes by given types and an optional validator. */
-    findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
+    findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount?: number, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
 
 }
 /** This is the main class to orchestrate and start rendering. */

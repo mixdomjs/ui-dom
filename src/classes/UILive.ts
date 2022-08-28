@@ -83,6 +83,13 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 
         // - Updating - //
 
+        public setUpdateModes(modes: Partial<UIUpdateCompareModesBy>, extend: boolean = true): void {
+            if (!extend)
+                this.updateModes = {};
+            for (const type in modes)
+                this.updateModes[type] = modes[type];
+        }
+
         public update(forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
             this.uiBoundary.uiHost.services.absorbUpdates(this.uiBoundary, { force: forceUpdate || false }, forceUpdateTimeout, forceRenderTimeout);
         }
@@ -160,8 +167,8 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             return _Find.treeNodesWithin(this.uiBoundary.treeNode, { dom: true }, maxCount, withinBoundaries, overHosts, validator).map(tNode => tNode.domNode) as Node[];
         }
 
-        public findBoundaries(maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] {
-            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { boundary: true }, maxCount, withinBoundaries, overHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[];
+        public findComponents<Component extends UIComponent = UIComponent>(maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Component[] {
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { boundary: true }, maxCount, withinBoundaries, overHosts, validator).map(t => (t.boundary && (t.boundary.live || t.boundary.mini)) as unknown as Component);
         }
 
         public findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
@@ -177,15 +184,15 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
          * - Note that for just passing the content, always use uiDom.Content.
          *   .. Only use .getChildren() if you really need it. For example, to wrap each individually or read info from their defs.
          */
-        public getChildren(skipNeeds: boolean = false, shallowCopy: boolean = true): Readonly<UIDefTarget[]> {
-            return this.uiBoundary.contentApi && this.uiBoundary.contentApi.getChildren(skipNeeds, shallowCopy) || [];
+        public getChildren(skipNeeds: boolean = false, shallowCopy: boolean = false): Readonly<UIDefTarget[]> {
+            return this.uiBoundary.contentApi.getChildren(skipNeeds, shallowCopy) || [];
         }
 
         /** Define for the remaining lifecycle if should update when content closure updates.
          * - If boolean given it forces the mode.
          * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
         public needsChildren(needs?: boolean | "temp" | null): void {
-            this.uiBoundary.contentApi && this.uiBoundary.contentApi.needsChildren(needs);
+            this.uiBoundary.contentApi.needsChildren(needs);
         }
 
 
@@ -301,12 +308,12 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             return this.uiBoundary.contextApi.getContexts(onlyNames, onlyTypes);
         }
 
-        public overrideContext(name: string, context: UIContext | null | undefined, refresh: boolean = true): void {
-            this.uiBoundary.contextApi.overrideContext(name, context, refresh);
+        public overrideContext(name: string, context: UIContext | null | undefined, refreshIfChanged: boolean = true): void {
+            this.uiBoundary.contextApi.overrideContext(name, context, refreshIfChanged);
         }
 
-        public overrideContexts(contexts: Record<string, UIContext | null | undefined>, refresh: boolean = true): void {
-            this.uiBoundary.contextApi.overrideContexts(contexts, refresh);
+        public overrideContexts(contexts: Record<string, UIContext | null | undefined>, refreshIfChanged: boolean = true): void {
+            this.uiBoundary.contextApi.overrideContexts(contexts, refreshIfChanged);
         }
 
         public createContext(data: any, overrideWithName?: string, refreshIfOverriden: boolean = true): UIContext {
@@ -371,6 +378,7 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 
     // - Updating - //
 
+    setUpdateModes(modes: Partial<UIUpdateCompareModesBy>, extend?: boolean): void;
     update(forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     setState<Key extends keyof State>(newState: Pick<State, Key> | State, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     setInState<Key extends keyof State>(property: Key, value: State[Key], forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
@@ -390,7 +398,7 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     queryDomElement<T extends Element = Element>(selector: string, withinBoundaries?: boolean, overHosts?: boolean): T | null;
     queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): T[];
     findDomNodes<T extends Node = Node>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
-    findBoundaries(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
+    findComponents<Component extends UIComponent = UIComponent>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): Component[];
     findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
 
 
@@ -409,7 +417,7 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     // - Contextual - //
 
     // Needs.
-    /** Use this to set the optional data refresh keys - resets the current keys for that context.
+    /** Use this to set the data needs for a context with optional data refresh keys - resets the current keys for that context.
      * - There can be one or many keywords, or true to allow anything (default). If false, then removes needs.
      * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "."
      * - By default, will mark the component to be updated if it was changed. If you intend to define multiple in a row, you can set the third parameter to false for all except the very last one.
@@ -441,16 +449,16 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
      * - Note that you should also assign the callbacks for uponAction and/or uponQuestion. */
     needsActions<Name extends keyof AllContexts & string>(contextName: Name, actionTypes: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean, extend?: boolean): void;
     /** Set action needs for multiple contexts in one go. It's like multiple needsActions calls as a dictionary: `{ [ctxName]: boolean | actionTypes[]; }`
-     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds.
-     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context. */
-    needsActionsBy<All extends { [Name in keyof AllContexts]: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean }>(namedNeeds: All, extend?: boolean): void;
+     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context.
+     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds. */
+    needsActionsBy<All extends { [Name in keyof AllContexts]: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean }>(namedNeeds: All, extendWithinContext?: boolean, extendForAll?: boolean): void;
 
     // Do stuff.
     /** Set the whole data of the context, and trigger refresh (by default). If the data is an object, can also extend. */
     setData<Name extends keyof AllContexts & string>(contextName: Name, data: Partial<AllContexts[Name]["data"]> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
     setData<Name extends keyof AllContexts & string>(contextName: Name, data: AllContexts[Name]["data"], extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Set a portion of data inside the context data, and trigger refresh (by default). If the sub data is an object, can also extend.
-     * Use the dataKey to define the location as a dotted string. For example: themes.selected */
+     * Use the dataKey to define the location as a dotted string. For example: "themes.selected" */
     setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
     setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: SubData, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Get the whole context data (directly). */
@@ -460,10 +468,10 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
      * Use the dataKey to define the location as a dotted string. For example: "themes.selected" */
     getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataKey: DataKey, noContextFallback?: never | undefined): PropType<CtxData, DataKey> | undefined;
     getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string, SubData extends PropType<CtxData, DataKey>, FallbackData extends SubData>(contextName: Name, dataKey: DataKey, noContextFallback: FallbackData): SubData;
-    /** Manually trigger refresh for dataKeys in the context.
+    /** Manually trigger refresh with refreshKeys for the given context.
      * Use the refreshKeys to define the location as a dotted string or an array of dotted strings. For example: ["themes.selected", "preferences"] */
     refreshData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
-    /** Manually trigger refresh for dataKeys for multiple contexts. (Also see refreshData above.)
+    /** Manually trigger refresh for refreshKeys for multiple contexts. (Also see refreshData above.)
      * - The keys are context names and values define the refresh: boolean | DataKey | DataKey[]. */
     refreshDataBy<
         All extends {
@@ -498,28 +506,31 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 
     // - Mangle contexts - //
 
-    /** Check quickly whether has context or not. Rarely needed - uses .getContext internally. */
-    hasContext<Name extends keyof AllContexts & string>(name: Name): boolean;
-    /** Gets the context locally by name.
-     * - Returns undefined if not found, otherwise UIContext | null.
-     * - If includeTunnels is set to false, skips contexts assigned by tunneling (overrideContext call or by attachTunnels prop).
-     * - This is mainly useful, when wanting to send actions from within the component - or perhaps in some special circumstances. */
-    getContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): AllContexts[Name] | null | undefined;
-    /** Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
+    /** Check whether has context or not by name. Rarely needed - uses .getContext internally. */
+    hasContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): boolean;
+    /** Gets the context locally by name. Returns undefined if not found, otherwise UIContext | null.
+     * Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
      *  - Cascading (1): Outer contexts.
      *  - Parent (2): Attached by parent.
-     *  - Overridden (4): Locally overridden. */
+     *  - Overridden (4): Locally overridden.
+     * Note that if specific flags given, the method will only check from those. This means it might return a context that is actually overridden on a higher level of importance. */
+    getContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): AllContexts[Name] | null | undefined;
+    /** Gets the contexts locally by names. If name not found, not included in the returned dictionary, otherwise the values are UIContext | null.
+     * Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
+     *  - Cascading (1): Outer contexts.
+     *  - Parent (2): Attached by parent.
+     *  - Overridden (4): Locally overridden.
+     * Note that if specific flags given, the method will only check from those. This means it might return context that are actually overridden on a higher level of importance. */
     getContexts<Name extends keyof AllContexts & string>(onlyNames?: RecordableType<Name> | null, onlyTypes?: UIContextAttach): Partial<Record<Name, AllContexts[Name] | null>>;
     /** Override context for this component only without affecting the cascading context flow.
-     * - This will override both: the cascading as well as tunneled (if the parent had used .attachTunnels for us).
-     * - If context is undefined, then will remove the previously set override. Otherwise sets it to the given context or null.
+     * - This will override both: the cascading as well as tunneled (if the parent had used .contexts prop for us).
+     * - If the given context value is undefined, then will remove the previously set override. Otherwise sets it to the given context or null.
      * - This method is most often used by calling createContext with second param, but can be used manually as well. */
-    overrideContext<Name extends keyof AllContexts & string>(name: Name, context: AllContexts[Name] | null | undefined, refresh?: boolean): void;
-    /** Same as overrideContext but for multiple contexts all at once.
-     * - Most often used by .createContexts() if the second param is set to true. */
-    overrideContexts<Name extends keyof AllContexts & string>(contexts: Partial<Record<Name, AllContexts[Name] | null | undefined>>, refresh?: boolean): void;
-    /** This creates a new context - presumably to be attached with .attachTunnels prop.
-     * - If overrideWithName given, then includes this component in the context as well (as if its parent had used .attachTunnels).
+    overrideContext<Name extends keyof AllContexts & string>(name: Name, context: AllContexts[Name] | null | undefined, refreshIfChanged?: boolean): void;
+    /** Same as overrideContext but for multiple contexts all at once. */
+    overrideContexts<Name extends keyof AllContexts & string>(contexts: Partial<Record<Name, AllContexts[Name] | null | undefined>>, refreshIfChanged?: boolean): void;
+    /** This creates a new context - presumably to be attached with .contexts prop.
+     * - If overrideWithName given, then includes this component in the context as well (as if its parent had used .contexts).
      *   .. Note that this is the same as using .overrideContext(name), so it will override any context of the same name for this component. */
     createContext<CtxData extends UIContextData = any, CtxActions extends UIActions = UIActions>(data: CtxData, overrideWithName?: never | "" | undefined, refreshIfOverriden?: never | false): UIContext<CtxData, CtxActions>;
     createContext<Name extends keyof AllContexts & string>(data: AllContexts[Name]["data"], overrideWithName: Name, refreshIfOverriden?: boolean): AllContexts[Name];
@@ -556,12 +567,12 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     render(): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
 
     // Contextual executors.
-    /** Override this with the actual method to build the context for this particular component. */
+    /** Assign callback to build the remote data for this particular component. */
     buildRemote?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): Remote;
-    /** Override this to listen to actions - originated by sendAction call on the context. */
+    /** Assign callback to listen to actions - originated by sendAction call on the context. */
     uponAction?<Name extends keyof AllContexts & string, Context extends AllContexts[Name]>(action: Context["Actions"], context: Context, name: Name): void;
-    /** Override this to answer to questions - asked by askQuestion call on the context. */
-    uponQuestion?<Name extends keyof AllContexts & string, Context extends AllContexts[Name], Action extends Context["Actions"] & UIQuestion<Action["value"]>>(action: Action, context: Context, name: Name): Action["value"];
+    /** Assign callback to answer to questions - asked by askQuestion call on the context. */
+    uponQuestion?<Name extends keyof AllContexts & string, Context extends AllContexts[Name], Question extends Context["Actions"] & UIQuestion<Question["value"]>>(question: Question, context: Context, name: Name): Question["value"];
     /** Listen to when context assignments change. */
     onContextChange?<Name extends keyof AllContexts & string>(name: Name, newContext: AllContexts[Name] | null, oldContext: AllContexts[Name] | null): boolean | null;
 
@@ -587,15 +598,10 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 
 // - The class and create shortcut - //
 
-// export declare class UILive<Props extends Dictionary = {}> extends _UILiveMixin(Object) {
-//     // Needed for TSX.
-//     constructor(props: Props, boundary?: UISourceBoundary);
-// }
-
 export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
     // We need a constructor here for typescript TSX.
-    constructor(props: Props, ...args: any[]) {
-        super(props, ...args);
+    constructor(props: Props, boundary?: UISourceBoundary, ...args: any[]) {
+        super(props, boundary, ...args);
     }
 }
 

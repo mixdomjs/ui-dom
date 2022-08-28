@@ -9,7 +9,7 @@ import {
     UIRenderOutput,
 } from "../static/_Types";
 import { _Defs } from "../static/_Defs";
-import { UIMiniBoundary, UISourceBoundary } from "./UIBoundary";
+import { UISourceBoundary } from "./UIBoundary";
 import { UIMini } from "./UIMini";
 import { uiContent } from "../uiDom";
 
@@ -25,7 +25,7 @@ export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps
 
     // - Members - //
 
-    public static uiBoundaries: Set<UISourceBoundary>;
+    public static components: Set<UIMini>;
     public static source: UIComponent;
     public static builder: ((...params: any[]) => Dictionary) | null;
     public static mixer: ((baseProps: Dictionary, addedProps: Dictionary, ...params: any[]) => Dictionary) | null;
@@ -42,19 +42,19 @@ export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps
     // - Settings that will be used for UIMini purposes (automatically used by all instances) - //
 
     public static updateMode: UIUpdateCompareMode | null;
-    public static uiWillMount?(boundary: UIMiniBoundary): void;
-    public static uiDidMount?(boundary: UIMiniBoundary): void;
-    public static uiShouldUpdate?(boundary: UIMiniBoundary, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
-    public static uiBeforeUpdate?(boundary: UIMiniBoundary, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
-    public static uiDidUpdate?(boundary: UIMiniBoundary, prevProps: Dictionary | null, newProps: Dictionary | null): void;
-    public static uiDidMove?(boundary: UIMiniBoundary): void;
-    public static uiWillUnmount?(boundary: UIMiniBoundary): void;
+    public static uiWillMount?(mini: UIMini): void;
+    public static uiDidMount?(mini: UIMini): void;
+    public static uiShouldUpdate?(mini: UIMini, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
+    public static uiBeforeUpdate?(mini: UIMini, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
+    public static uiDidUpdate?(mini: UIMini, prevProps: Dictionary | null, newProps: Dictionary | null): void;
+    public static uiDidMove?(mini: UIMini): void;
+    public static uiWillUnmount?(mini: UIMini): void;
 
     // - Instanced - //
 
     // For startup and TSX.
-    constructor(props: BaseProps, updateMode: UIUpdateCompareMode | null = null) {
-        super(props, updateMode);
+    constructor(props: BaseProps, boundary?: UISourceBoundary) {
+        super(props, boundary);
     }
 
     render(): UIRenderOutput { return uiContent; }
@@ -77,8 +77,8 @@ export type UIWiredType<BaseProps = {}, AddedProps = {}, MixedProps = BaseProps 
 
     // - These (except updateMode) will be set externally upon creating a wired class - //
 
-    /** The currently instanced boundaries that have a QWire class instance as their boundary.mini. */
-    uiBoundaries: Set<UISourceBoundary>;
+    /** The currently instanced components that using our custom class wired class as their constructor. */
+    components: Set<UIMini>;
     source: UIComponent;
     builder: Builder | null;
     mixer: Mixer | null;
@@ -108,16 +108,16 @@ export type UIWiredType<BaseProps = {}, AddedProps = {}, MixedProps = BaseProps 
 
     // - Settings that will be used for UIMini purposes (automatically used by all instances) - //
 
-    /** Special call for wired only - called right after constructing the wired instance. You can access the mini instance by boundary.mini. */
-    uiWillMount?(boundary: UIMiniBoundary<BaseProps>): void;
-    uiDidMount?(boundary: UIMiniBoundary<BaseProps>): void;
+    /** Special call for wired only - called right after constructing the wired instance. */
+    uiWillMount?(mini: UIMini<BaseProps>): void;
+    uiDidMount?(mini: UIMini<BaseProps>): void;
     /** On wired, the static .uiShouldUpdate is not called if the instance had .uiShouldUpdate and it returned a boolean.
      * - Otherwise, this is called and can affect the outcome normally. */
-    uiShouldUpdate?(boundary: UIMiniBoundary<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
-    uiBeforeUpdate?(boundary: UIMiniBoundary<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
-    uiDidUpdate?(boundary: UIMiniBoundary<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
-    uiDidMove?(boundary: UIMiniBoundary<BaseProps>): void;
-    uiWillUnmount?(boundary: UIMiniBoundary<BaseProps>): void;
+    uiShouldUpdate?(mini: UIMini<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
+    uiBeforeUpdate?(mini: UIMini<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
+    uiDidUpdate?(mini: UIMini<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
+    uiDidMove?(mini: UIMini<BaseProps>): void;
+    uiWillUnmount?(mini: UIMini<BaseProps>): void;
 
 };
 
@@ -131,13 +131,13 @@ export const createWired = <
     Params extends any[] = any[],
     Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps,
     Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps
->(component: UIComponent<MixedProps>, builderOrProps?: Builder | AddedProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer> => class Wired extends UIWired<BaseProps> {
+>(component: UIComponent<MixedProps>, builderOrProps?: Builder | AddedProps | null, mixer?: Mixer | null, ...params: Params): UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer> => class Wired extends UIWired<BaseProps> {
 
     public static UI_DOM_TYPE = "Wired" as const;
 
     // Prepare static side.
     /** The instanced boundaries. The Wired class instance will be found as: boundary.miniApi. */
-    public static uiBoundaries: Set<UISourceBoundary> = new Set();
+    public static components: Set<UIMini> = new Set();
     public static source: UIComponent = component;
     public static builder: Builder | null = typeof builderOrProps !== "object" && builderOrProps || null;
     public static mixer: Mixer | null = mixer || null;
@@ -162,8 +162,8 @@ export const createWired = <
 
     /** Call to trigger the updates for all instances. */
     public static update(forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
-        for (const boundary of Wired.uiBoundaries)
-            boundary.update(true, forceUpdateTimeout, forceRenderTimeout);
+        for (const mini of Wired.components)
+            mini.uiBoundary.update(true, forceUpdateTimeout, forceRenderTimeout);
     }
 
     /** Call this to manually update the wired part of props and force a refresh.

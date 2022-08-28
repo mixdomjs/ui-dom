@@ -11,11 +11,10 @@ import {
     UIDefApplied,
     UIPreTag,
     UIComponentTag,
-    UIDomTag,
     UIRenderOutput,
     UIContentValue,
     Dictionary,
-    DomTags,
+    UIDomTag,
     HTMLSVGAttributes,
     UIComponentProps,
 } from "./_Types";
@@ -36,7 +35,8 @@ import { UIContextsProps } from "../classes/UIContext";
 
 // - Exports - //
 
-export function createDef<DomTag extends DomTags>(domTag: DomTag, origProps?: HTMLSVGAttributes<DomTag> | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+/** Create a rendering definition. Supports receive direct JSX compiled output. */
+export function createDef<DomTag extends UIDomTag>(domTag: DomTag, origProps?: HTMLSVGAttributes<DomTag> | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
 export function createDef<Props extends Dictionary = {}>(componentTag: UIComponentTag<Props>, origProps?: (Props & UIComponentProps) | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
 export function createDef(tagOrClass: UIPreTag, origProps: Dictionary | null = null, ...contents: UIRenderOutput[]): UIDefTarget | null {
     // Get type.
@@ -119,8 +119,6 @@ export function createDef(tagOrClass: UIPreTag, origProps: Dictionary | null = n
         case "portal": {
             const props = (origProps || {}) as UIPortalProps;
             targetDef.domPortal = props.container || null;
-            if (!childDefs[0] && props && (props.content != null))
-                contents = [ props.content ];
             break;
         }
         case "contexts": {
@@ -153,12 +151,12 @@ export function createDef(tagOrClass: UIPreTag, origProps: Dictionary | null = n
 //
 //         // - Internal - //
 //
-//         export type Attributes<Tag extends DomTags = DomTags> = HTMLSVGAttributes<Tag>;
+//         export type Attributes<Tag extends UIDomTag = UIDomTag> = HTMLSVGAttributes<Tag>;
 //
 //         // - TypeScript - //
 //
 //         export type IntrinsicElements = {
-//             [Tag in DomTags]: Attributes<Tag>;
+//             [Tag in UIDomTag]: Attributes<Tag>;
 //         };
 //
 //         export interface ElementAttributesProperty {

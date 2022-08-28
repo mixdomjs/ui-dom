@@ -3,11 +3,10 @@
 // - Imports - //
 
 import {
-    DomTags,
+    UIDomTag,
     UICloneNodeBehaviour,
     UIGenericProps,
     UIProps,
-    UIRenderOutput,
 } from "../static/_Types";
 
 
@@ -28,7 +27,6 @@ export class UIFragment<Props extends UIFragmentProps = {}> {
 
 export interface UIPortalProps extends UIProps {
     container: Node | null;
-    content?: UIRenderOutput;
 }
 export class UIPortal<Props extends UIPortalProps = UIPortalProps> {
     public static UI_DOM_TYPE = "Portal";
@@ -36,14 +34,14 @@ export class UIPortal<Props extends UIPortalProps = UIPortalProps> {
     constructor(_props: Props) { }
 }
 
-export type UIElementProps<Type extends DomTags = DomTags> = UIProps & UIGenericProps<Type> & {
+export type UIElementProps<Type extends UIDomTag = UIDomTag> = UIProps & UIGenericProps<Type> & {
     element: HTMLElement | SVGElement | null;
     /** Determines what happens when meeting duplicates.
      * - If == null, uses the uiHost based setting.
      * - If boolean, then is either "deep" or nothing. */
     cloneMode?: boolean | UICloneNodeBehaviour | null;
 };
-export class UIElement<Type extends DomTags = DomTags, Props extends UIElementProps<Type> = UIElementProps<Type>> {
+export class UIElement<Type extends UIDomTag = UIDomTag, Props extends UIElementProps<Type> = UIElementProps<Type>> {
     public static UI_DOM_TYPE = "Element";
     props: Props;
     constructor(_props: Props) { }

@@ -10,6 +10,8 @@ import {
     UITreeNode,
     UITreeNodeType,
     UIContextAttach,
+    UIDomTag,
+    UIComponent,
 } from "./static/_Types";
 import { _Lib } from "./static/_Lib";
 import { _Defs, createDef } from "./static/_Defs";
@@ -27,7 +29,6 @@ import { createContext, createContexts, UIContext, UIContextMixin, UIContexts } 
 // Tools.
 import { createEffect, UIEffect, UIEffectMixin } from "./addons/UIEffect";
 import { createDataPicker, createDataSelector } from "./addons/DataPicker";
-import { UISourceBoundary } from "./classes/UIBoundary";
 
 
 
@@ -144,11 +145,11 @@ export const uiDom = {
     createMini,
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */
     mini: createMini,
-    /** Creates a wired renderer.
-     * - Technically creates a class that behaves like UILive (or actually more like UIMiniFunction as a class).
-     *     1. This class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
-     *     2. This class can then allow to set and refresh the common props, and trigger should-updates for all the instances.
-     *     3. The props of the actual class instances are mixed with the wiredProps defined by this class.
+    /** Creates a wired component.
+     * - Technically creates a custom class that extends UIMini.
+     *     1. This custom class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
+     *     2. This class then allows to set and refresh the common props, and trigger should-updates for all the instances.
+     *     3. The props of the actual class instances are mixed with the addedProps defined by this class.
      * - About builder function:
      *     * The (2nd arg) builder is a callback to build common props, it receives: (lastProps, ...passParams).
      *     * The passParams are any optional arguments after the 3rd one (mixer).
@@ -156,10 +157,10 @@ export const uiDom = {
      */
     createWired,
     /** Creates a wired renderer.
-     * - Technically creates a class that behaves like UILive (or actually more like UIMiniFunction as a class).
-     *     1. This class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
-     *     2. This class can then allow to set and refresh the common props, and trigger should-updates for all the instances.
-     *     3. The props of the actual class instances are mixed with the wiredProps defined by this class.
+     * - Technically creates a custom class that extends UIMini.
+     *     1. This custom class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
+     *     2. This class then allows to set and refresh the common props, and trigger should-updates for all the instances.
+     *     3. The props of the actual class instances are mixed with the addedProps defined by this class.
      * - About builder function:
      *     * The (2nd arg) builder is a callback to build common props, it receives: (lastProps, ...passParams).
      *     * The passParams are any optional arguments after the 3rd one (mixer).
@@ -177,9 +178,9 @@ export const uiDom = {
 
     /** Returns a single html element.
      * - If a wrapInTag given will use it as a container.
-     * - Otherwise, if the string refers to multiple, returns an element containing them (with settings.renderInnerHtmlTag).
+     * - Otherwise, if the string refers to multiple, returns an element containing them (with settings.renderHtmlDefTag).
      * - Normally uses a container only as a fallback if has many children. */
-    htmlDef: (innerHtml: string, wrapInTag?: keyof HTMLElementTagNameMap, props?: UIDomProps, key?: any): UIDefTarget => {
+    htmlDef: (innerHtml: string, wrapInTag?: UIDomTag, props?: UIDomProps, key?: any): UIDefTarget => {
         // Create def.
         const def: UIDefTarget = {
             _uiDefType: "content",
@@ -201,16 +202,16 @@ export const uiDom = {
 
     // - Finding stuff - //
 
-    findTreeNodesIn: (treeNode: UITreeNode, types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[] =>
-        _Find.treeNodesWithin(treeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator),
-    findBoundariesIn: (treeNode: UITreeNode, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[] =>
-        _Find.treeNodesWithin(treeNode, { boundary: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.boundary) as UISourceBoundary[],
-    findDomNodesIn: <T extends Node = Node>(treeNode: UITreeNode, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[] =>
-        _Find.treeNodesWithin(treeNode, { dom: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(tNode => tNode.domNode) as T[],
-    queryDomElementIn: <T extends Element = Element>(treeNode: UITreeNode, selector: string, allowWithinBoundaries?: boolean, allowOverHosts?: boolean): T | null =>
-        _Find.domElementByQuery<T>(treeNode, selector, allowWithinBoundaries, allowOverHosts),
-    queryDomElementsIn: <T extends Element = Element>(treeNode: UITreeNode, selector: string, maxCount: number = 0, allowWithinBoundaries?: boolean, allowOverHosts?: boolean): T[] =>
-        _Find.domElementsByQuery<T>(treeNode, selector, maxCount, allowWithinBoundaries, allowOverHosts),
+    findTreeNodesIn: (treeNode: UITreeNode, types?: RecordableType<UITreeNodeType>, maxCount?: number, inNested?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[] =>
+        _Find.treeNodesWithin(treeNode, types && _Lib.buildRecordable<UITreeNodeType>(types), maxCount, inNested, overHosts, validator),
+    findComponentsIn: <Component extends UIComponent = UIComponent>(treeNode: UITreeNode, maxCount?: number, inNested?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): Component[] =>
+        _Find.treeNodesWithin(treeNode, { boundary: true }, maxCount, inNested, overHosts, validator).map(t => (t.boundary && (t.boundary.live || t.boundary.mini)) as unknown as Component),
+    findDomNodesIn: <T extends Node = Node>(treeNode: UITreeNode, maxCount?: number, inNested?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[] =>
+        _Find.treeNodesWithin(treeNode, { dom: true }, maxCount, inNested, overHosts, validator).map(tNode => tNode.domNode) as T[],
+    queryDomElementIn: <T extends Element = Element>(treeNode: UITreeNode, selector: string, inNested?: boolean, overHosts?: boolean): T | null =>
+        _Find.domElementByQuery<T>(treeNode, selector, inNested, overHosts),
+    queryDomElementsIn: <T extends Element = Element>(treeNode: UITreeNode, selector: string, maxCount?: number, inNested?: boolean, overHosts?: boolean): T[] =>
+        _Find.domElementsByQuery<T>(treeNode, selector, maxCount, inNested, overHosts),
 
 
     // - Html attribute helpers - //
@@ -237,7 +238,7 @@ export const uiDom = {
 
     // - General purpose utilities - //
 
-    /** General inlined equal with level for deepness.
+    /** General equal comparison with level for deepness.
      * - nDepth: 0. No depth - simple check.
      * - nDepth: 1. Shallow equal.
      * - nDepth: 2. Shallow double equal.

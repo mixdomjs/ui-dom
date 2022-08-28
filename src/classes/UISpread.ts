@@ -80,7 +80,7 @@ export const createSpread = <Props extends Dictionary = {}>(func: UISpreadFuncti
     /** The unfold method unique to this particular UISpread extended class. */
     static unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null {
         // Render the static function to get spread defs.
-        const subDef = _Defs.createDefFromContent( _UISpread.render(props) );
+        const subDef = _Defs.createDefFromContent( _UISpread.render(props, childDefs) );
         return subDef && _UISpread.unfoldWith(subDef, childDefs);
     }
 };

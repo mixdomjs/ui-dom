@@ -168,7 +168,7 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
     }
 
     /** If undefined, will remove the overridden state. Returns flags for whether contextual refresh should be made. */
-    public overrideContext(name: string, context: UIContext | null | undefined, refresh: boolean = true): UIContextRefresh {
+    public overrideContext(name: string, context: UIContext | null | undefined, refreshIfChanged: boolean = true): UIContextRefresh {
         // Detect change.
         const oldContext = this.getContext(name);
         const newContext = context !== undefined ? context : this.getContext(name, UIContextAttach.Parent | UIContextAttach.Cascading);
@@ -190,19 +190,19 @@ export class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData ex
         // Did change.
         const didChange: UIContextRefresh = oldContext !== newContext ? _Apply.helpUpdateContext(this.uiBoundary, name, newContext || null, oldContext || null) : 0;
         // Refresh.
-        if (refresh && _Apply.shouldUpdateContextually(didChange))
+        if (refreshIfChanged && _Apply.shouldUpdateContextually(didChange))
             this.updateRemote();
         return didChange;
     }
 
     /** Override multiple contexts in one go. Returns flags for whether contextual refresh should be made. */
-    public overrideContexts(contexts: Record<string, UIContext | null | undefined>, refresh: boolean = true): UIContextRefresh {
+    public overrideContexts(contexts: Record<string, UIContext | null | undefined>, refreshIfChanged: boolean = true): UIContextRefresh {
         // Override each - don't refresh.
         let didChange: UIContextRefresh = 0;
         for (const name in contexts)
             didChange |= this.overrideContext(name, contexts[name], false);
         // Refresh.
-        if (refresh && _Apply.shouldUpdateContextually(didChange))
+        if (refreshIfChanged && _Apply.shouldUpdateContextually(didChange))
             this.updateRemote();
         // Contextual changes.
         return didChange;

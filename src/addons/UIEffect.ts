@@ -62,9 +62,9 @@ function _UIEffectMixin<Memory = any>(Base: ClassType) {
         }
 
         /** Cancel effect. */
-        public cancel(skipUnmount: boolean = true, clearEffect: boolean = false): void {
+        public cancel(runUnmount: boolean = true, clearEffect: boolean = false): void {
             // Run unmount.
-            if (!skipUnmount && this.onUnmount)
+            if (runUnmount && this.onUnmount)
                 this.onUnmount(this.memory, this.memory, "cancel");
             // Clear.
             if (clearEffect) {

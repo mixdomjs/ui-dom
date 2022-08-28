@@ -1,3 +1,25 @@
+## v2.4.0
+
+### Features
+
+- Added `uiBoundary` member to the `UIMini` class. This is simply to allow it to be used more fluently and so that can add some more methods to it without extra hassle (due to not having `.uiBoundary` exposed).
+- Also changed the constuctor arguments on `UIMini` to reflect `UILive` - and likewise on `UIWired`.
+- Added searching methods to the `UIMini` class.
+- Added `setUpdateModes` method for `UILive` for symmetry with `UIMini`.
+- Added `childDefs` as a second argument to Spread Functions - so can eg. wrap each child individually.
+
+### Changes
+
+- In accordance with the uiBoundary addition above, changed the findBoundaries and such methods to refer to components instead.
+- Likewise changed in `UIWired` that callbacks can just get the component instead of boundary.
+- Changed the default value of the second argument for `.getChildren(skipNeeds = false, shallowCopy = false)` to  `false` on `UILive` and `UIMini` (and internal `UIContentApi` and `UIBoundary` ) - as it is in the docs. The reason is that might call `.getChildren()` at other times (than when parent has rendered) and might then want to do an identity check on the array itself.
+- Removed `UIPortal`'s optional `content` prop - it's clearer to just always insert the contents inside.
+- Flipped the meaning of the first argument `skipUnmount` to `runUnmount` on `cancel` method for `UIEffect`. (At the same time kept the default value as true - there was a momentarily confusion of the meaning and default value in v2.3.1.)
+
+### Fixes
+
+- Fixed that using the special `data` attribute on dom elements, does not add an extra attribute `data-data=[Object object]` to the element.
+
 ## v2.3.1
 
 ### Changes

@@ -23,7 +23,7 @@ export class UIContentApi {
      * - Note that for just passing the content, always use uiDom.Content.
      *   .. Only use .getChildren() if you really need it. For example, to wrap each individually or read info from their defs.
      */
-    public getChildren(skipNeeds: boolean = false, shallowCopy: boolean = true): Readonly<UIDefTarget[]> | null {
+    public getChildren(skipNeeds: boolean = false, shallowCopy: boolean = false): Readonly<UIDefTarget[]> | null {
         // Mark that was needed.
         if (!skipNeeds && typeof this.childrenNeeds !== "boolean")
             this.childrenNeeds = "temp";

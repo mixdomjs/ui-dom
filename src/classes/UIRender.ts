@@ -484,7 +484,7 @@ export class UIRender {
 
     // - Static - //
 
-    static IGNORE_PROPS: Record<string, "other" | "render" | undefined> = { innerHTML: "render", outerHTML: "render", textContent: "render", innerText: "render", outerText: "render", style: "other", data: "other", className: "other" };
+    static SPECIAL_PROPS: Record<string, "other" | "render" | undefined> = { innerHTML: "render", outerHTML: "render", textContent: "render", innerText: "render", outerText: "render", style: "other", data: "other", className: "other" };
     static PASSING_TYPES: Partial<Record<UITreeNodeType, true>> = { boundary: true, pass: true, contexts: true, host: true };
     static LISTENER_PROPS = [
     "Abort","Activate","AnimationCancel","AnimationEnd","AnimationIteration","AnimationStart","AuxClick","Blur","CanPlay","CanPlayThrough","Change","Click","Close","ContextMenu","CueChange","DblClick","Drag","DragEnd","DragEnter","DragLeave","DragOver","DragStart","Drop","DurationChange","Emptied","Ended","Error","Focus","FocusIn","FocusOut","GotPointerCapture","Input","Invalid","KeyDown","KeyPress","KeyUp","Load","LoadedData","LoadedMetaData","LoadStart","LostPointerCapture","MouseDown","MouseEnter","MouseLeave","MouseMove","MouseOut","MouseOver","MouseUp","Pause","Play","Playing","PointerCancel","PointerDown","PointerEnter","PointerLeave","PointerMove","PointerOut","PointerOver","PointerUp","Progress","RateChange","Reset","Resize","Scroll","SecurityPolicyViolation","Seeked","Seeking","Select","Stalled","Submit","Suspend","TimeUpdate","Toggle","TouchCancel","TouchEnd","TouchMove","TouchStart","TransitionCancel","TransitionEnd","TransitionRun","TransitionStart","VolumeChange","Waiting","Wheel"].reduce((acc,curr) => (acc["on" + curr]=curr.toLowerCase(),acc), {}) as Record<ListenerAttributeNames, (e: Event) => void>;
@@ -693,9 +693,10 @@ export class UIRender {
         for (const prop in allDiffs) {
 
             // Special cases.
-            if (UIRender.IGNORE_PROPS[prop]) {
+            const specialProp = UIRender.SPECIAL_PROPS[prop];
+            if (specialProp) {
                 // Not renderable.
-                if (UIRender.IGNORE_PROPS[prop] === "render") {
+                if (specialProp === "render") {
                     if (logWarnings)
                         console.warn("__UIRender.domApplyProps: Warning: Is using an ignored dom prop: ", prop, " for treeNode: ", treeNode);
                 }
@@ -718,20 +719,20 @@ export class UIRender {
                     else {
                         // Get diffs.
                         const nextVal = nextProps[prop];
-                        const diffs = _Lib.getDictionaryDiffs(oldProps[prop] || {}, nextVal || {});
-                        if (diffs) {
+                        const subDiffs = _Lib.getDictionaryDiffs(oldProps[prop] || {}, nextVal || {});
+                        if (subDiffs) {
                             // Diffs.
-                            diffs[prop] = diffs;
+                            diffs[prop] = subDiffs;
                             // Apply.
                             if (prop === "data") {
-                                for (const subProp in diffs)
-                                    diffs[subProp] !== undefined ? domElement.dataset[subProp] = diffs[subProp] : delete domElement.dataset[subProp];
+                                for (const subProp in subDiffs)
+                                    subDiffs[subProp] !== undefined ? domElement.dataset[subProp] = subDiffs[subProp] : delete domElement.dataset[subProp];
                             }
                             // For styles, we use the very flexible element.style[prop] = value. If value is null, then will remove.
                             // .. This way, we support both ways to input styles: "backgroundColor" and "background-color".
                             else
-                                for (const subProp in diffs)
-                                    domElement.style[subProp] = diffs[subProp] != null ? diffs[subProp] : null;
+                                for (const subProp in subDiffs)
+                                    domElement.style[subProp] = subDiffs[subProp] != null ? subDiffs[subProp] : null;
                             // Bookkeeping.
                             nextVal ? appliedProps[prop] = nextVal : delete appliedProps[prop];
                         }

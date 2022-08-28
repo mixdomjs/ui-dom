@@ -422,18 +422,27 @@ interface SVGNativeAttributes {
 }
 
 declare const UIMini_base: {
-    new (props: {}, updateMode?: UIUpdateCompareMode | null, ...passArgs: any[]): {
+    new (props: {}, boundary?: UISourceBoundary | undefined, ...passArgs: any[]): {
+        readonly uiBoundary: UIMiniBoundary<{}>;
         readonly props: {};
         updateMode: UIUpdateCompareMode | null;
         setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
-        render(_props: {}): UIMiniFunction<{}> | UIRenderOutput;
+        getChildren(skipNeeds?: boolean, shallowCopy?: boolean): readonly UIDefTarget[];
+        needsChildren(needs?: boolean | "temp" | null | undefined): void;
         isMounted(): boolean;
-        getChildren(_skipNeeds?: boolean, _shallowCopy?: boolean): readonly UIDefTarget[];
-        needsChildren(_needs?: boolean | "temp" | null | undefined): void;
+        queryDomElement(selector: string, withinBoundaries?: boolean, overHosts?: boolean): Element | null;
+        queryDomElements(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): Element[];
+        findDomNodes(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): Node[];
+        findComponents<Component extends UIComponent<{}> = UIComponent<{}>>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): Component[];
+        findTreeNodes(types?: RecordableType<UITreeNodeType> | undefined, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): UITreeNode[];
+        render(_props: {}): UIMiniFunction<{}> | UIRenderOutput;
         constructor: Function;
         toString(): string;
         toLocaleString(): string;
         valueOf(): Object;
+        /** Set the update mode for this particular renderer instance.
+         * - If null uses settings.updateMiniMode from uiHost.
+         * - Note that you can also assign the .uiShouldUpdate method to affect this. */
         hasOwnProperty(v: PropertyKey): boolean;
         isPrototypeOf(v: Object): boolean;
         propertyIsEnumerable(v: PropertyKey): boolean;
@@ -441,6 +450,8 @@ declare const UIMini_base: {
     UI_DOM_TYPE: string;
 };
 interface UIMini<Props extends Dictionary = {}> {
+    /** Ref to the dedicated boundary. */
+    uiBoundary: UIMiniBoundary;
     /** Fresh props. */
     readonly props: Props;
     /** Settable updateMode: "always" | "changed" | "shallow" | "double" | "deep".
@@ -453,10 +464,12 @@ interface UIMini<Props extends Dictionary = {}> {
      * - If null uses settings.updateMiniMode from uiHost.
      * - Note that you can also assign the .uiShouldUpdate method to affect this. */
     setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
-    /** Whether the component has mounted or not. */
     isMounted(): boolean;
-    /** The renderer will be assigned here. */
-    render(props: Props): UIRenderOutput | UIMiniFunction<Props>;
+    queryDomElement<T extends Element = Element>(selector: string, withinBoundaries?: boolean, overHosts?: boolean): T | null;
+    queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): T[];
+    findDomNodes<T extends Node = Node>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
+    findComponents<Component extends UIComponent = UIComponent>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): Component[];
+    findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
     /** Get the actual contentPass childDefs. If used will mark needsChildren temporarily (until next render).
      *   .. When used, reads the children from the content pass.
      *   .. Also marks that the function "needs children", so will be re-rendered if children change.
@@ -468,6 +481,8 @@ interface UIMini<Props extends Dictionary = {}> {
      * - If boolean given it forces the mode.
      * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
     needsChildren(needs?: boolean | "temp" | null): void;
+    /** The renderer will be assigned here. */
+    render(props: Props): UIRenderOutput | UIMiniFunction<Props>;
     uiDidMount?(): void;
     uiDidMove?(): void;
     /** This is a callback that will always be called when the component is checked for updates.
@@ -486,7 +501,7 @@ interface UIMini<Props extends Dictionary = {}> {
     uiWillUnmount?(): void;
 }
 declare class UIMini<Props extends Dictionary = {}> extends UIMini_base {
-    constructor(props: Props, updateMode?: UIUpdateCompareMode | null);
+    constructor(props: Props, boundary?: UISourceBoundary);
 }
 declare const createMini: <Props extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>) => UIMiniFunction<Props>;
 /** There are two ways you can use this:
@@ -564,11 +579,11 @@ declare const UIHost_base: {
         modifySettings(settings: UIHostSettingsUpdate): void;
         getRootDomNode(): Node | null;
         getRootDomNodes(inNestedBoundaries?: boolean): Node[];
-        queryDomElement<T extends Element = Element>(selectors: string, allowOverHosts?: boolean): T | null;
-        queryDomElements<T_1 extends Element = Element>(selectors: string, maxCount?: number, allowOverHosts?: boolean): T_1[];
-        findDomNodes<T_2 extends Node = Node>(maxCount?: number, allowOverHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): T_2[];
-        findBoundaries(maxCount?: number, allowOverHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): UISourceBoundary[];
-        findTreeNodes(types?: RecordableType<UITreeNodeType> | undefined, maxCount?: number, allowOverHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): UITreeNode[];
+        queryDomElement<T extends Element = Element>(selectors: string, overHosts?: boolean): T | null;
+        queryDomElements<T_1 extends Element = Element>(selectors: string, maxCount?: number, overHosts?: boolean): T_1[];
+        findDomNodes<T_2 extends Node = Node>(maxCount?: number, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): T_2[];
+        findComponents<Component extends UIComponent<{}> = UIComponent<{}>>(maxCount?: number, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): Component[];
+        findTreeNodes(types?: RecordableType<UITreeNodeType> | undefined, maxCount?: number, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): UITreeNode[];
         constructor: Function;
         toString(): string;
         toLocaleString(): string;
@@ -620,15 +635,15 @@ interface UIHost {
      * - Optionally define whether to search in nested boundaries or not (by default does). */
     getRootDomNodes(inNestedBoundaries?: boolean): Node[];
     /** Get the first dom element by a selectors within the host (like document.querySelector). Should rarely be used, but it's here if needed. */
-    queryDomElement<T extends Element = Element>(selectors: string, allowOverHosts?: boolean): T | null;
+    queryDomElement<T extends Element = Element>(selectors: string, overHosts?: boolean): T | null;
     /** Get dom elements by a selectors within the host (like document.querySelectorAll). Should rarely be used, but it's here if needed. */
-    queryDomElements<T extends Element = Element>(selectors: string, maxCount?: number, allowOverHosts?: boolean): T[];
+    queryDomElements<T extends Element = Element>(selectors: string, maxCount?: number, overHosts?: boolean): T[];
     /** Find all dom nodes by an optional validator. */
-    findDomNodes<T extends Node = Node>(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
-    /** Find all boundaries by an optional validator. */
-    findBoundaries(maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
+    findDomNodes<T extends Node = Node>(maxCount?: number, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
+    /** Find all components by an optional validator. */
+    findComponents<Component extends UIComponent = UIComponent>(maxCount?: number, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): Component[];
     /** Find all treeNodes by given types and an optional validator. */
-    findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount?: number, allowOverHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
+    findTreeNodes(types: RecordableType<UITreeNodeType>, maxCount?: number, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
 }
 /** This is the main class to orchestrate and start rendering. */
 declare class UIHost extends UIHost_base {
@@ -877,17 +892,17 @@ declare const createContext: <Data = any, Actions extends UIActions = UIActions>
  *      * For example: `class MyMix extends (UIContextMixin as ClassBaseMixer<UIContext<MyData, MyActions>>)(MyBase) {}`
  */
 declare const UIContextMixin: ClassBaseMixer<UIContext<any, {}>>;
-declare type UIContextsProps<AllContexts extends UIAllContexts = {}> = {
+declare type UIContextsProps<AllContexts extends UIAllContextsWithNull = {}> = {
     /** Include many named contexts. */
     cascade: AllContexts | null;
 };
-declare class UIContexts<AllContexts extends UIAllContexts = {}, Props extends UIContextsProps = UIContextsProps> {
+declare class UIContexts<AllContexts extends UIAllContextsWithNull = {}, Props extends UIContextsProps = UIContextsProps> {
     static UI_DOM_TYPE: string;
     contexts: AllContexts;
     props: Props;
     constructor(_props: Props);
 }
-declare type UIContextsType<AllContexts extends UIAllContexts = {}> = ClassType<UIContexts<AllContexts>, [UIContextsProps]> & {
+declare type UIContextsType<AllContexts extends UIAllContextsWithNull = {}> = ClassType<UIContexts<AllContexts>, [UIContextsProps]> & {
     readonly UI_DOM_TYPE: "Contexts";
 };
 /** Create multiple named contexts. (Useful for tunneling.) */
@@ -902,6 +917,7 @@ declare const UILive_base: {
         readonly uiBoundary: UILiveBoundary<{}, {}, {}, {}>;
         updateModes: Partial<UIUpdateCompareModesBy>;
         timers?: Map<any, number> | undefined;
+        setUpdateModes(modes: Partial<UIUpdateCompareModesBy>, extend?: boolean): void;
         update(forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
         setState(newState: {} | Pick<{}, never>, forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
         setInState(property: never, value: any, forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
@@ -913,7 +929,7 @@ declare const UILive_base: {
         queryDomElement(selector: string, withinBoundaries?: boolean, overHosts?: boolean): Element | null;
         queryDomElements(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): Element[];
         findDomNodes(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): Node[];
-        findBoundaries(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): UISourceBoundary[];
+        findComponents<Component extends UIComponent<{}> = UIComponent<{}>>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): Component[];
         findTreeNodes(types?: RecordableType<UITreeNodeType> | undefined, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): UITreeNode[];
         /** Get the actual contentPass childDefs. If used will mark needsChildren temporarily (until next render).
          *   .. When used, reads the children from the content pass.
@@ -953,8 +969,8 @@ declare const UILive_base: {
         hasContext(name: never, onlyTypes?: UIContextAttach): boolean;
         getContext(name: never, onlyTypes?: UIContextAttach): UIContext<any, {}> | null | undefined;
         getContexts(onlyNames?: RecordableType<never> | null | undefined, onlyTypes?: UIContextAttach | undefined): Partial<Record<string, UIContext<any, {}> | null>>;
-        overrideContext(name: string, context: UIContext<any, {}> | null | undefined, refresh?: boolean): void;
-        overrideContexts(contexts: Record<string, UIContext<any, {}> | null | undefined>, refresh?: boolean): void;
+        overrideContext(name: string, context: UIContext<any, {}> | null | undefined, refreshIfChanged?: boolean): void;
+        overrideContexts(contexts: Record<string, UIContext<any, {}> | null | undefined>, refreshIfChanged?: boolean): void;
         createContext(data: any, overrideWithName?: string | undefined, refreshIfOverriden?: boolean): UIContext<any, {}>;
         createContexts(allData: any, overrideForSelf?: boolean, refreshIfOverriden?: boolean): Record<string, UIContext<any, {}>>;
         createWired(component: UIComponent<{}>, builder: (...params: any[]) => Dictionary<string, any>, mixer: (baseProps: Dictionary<string, any>, addsProps: Dictionary<string, any>, ...params: any[]) => Dictionary<string, any>, ...params: any[]): UIWiredType<{}, {}, {}, any[], (lastProps: {} | null, ...params: any[]) => {}, (baseProps: {}, addedProps: {}, ...params: any[]) => {}>;
@@ -980,6 +996,7 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     /** The boundary enveloping us - basically we just provide render function for it, and have slots for callbacks. */
     readonly uiBoundary: UILiveBoundary;
     timers?: Map<any, number>;
+    setUpdateModes(modes: Partial<UIUpdateCompareModesBy>, extend?: boolean): void;
     update(forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     setState<Key extends keyof State>(newState: Pick<State, Key> | State, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
     setInState<Key extends keyof State>(property: Key, value: State[Key], forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
@@ -991,7 +1008,7 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     queryDomElement<T extends Element = Element>(selector: string, withinBoundaries?: boolean, overHosts?: boolean): T | null;
     queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): T[];
     findDomNodes<T extends Node = Node>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
-    findBoundaries(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UISourceBoundary[];
+    findComponents<Component extends UIComponent = UIComponent>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): Component[];
     findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
     /** Get the actual contentPass childDefs.
      * - Will also mark needsChildren temporarily (until next render), unless skipNeeds is true.
@@ -1000,7 +1017,7 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     getChildren(skipNeeds?: boolean, shallowCopy?: boolean): Readonly<UIDefTarget[]>;
     /** Define for the remaining lifecycle if should update when content closure updates. */
     needsChildren(needs?: boolean | null): void;
-    /** Use this to set the optional data refresh keys - resets the current keys for that context.
+    /** Use this to set the data needs for a context with optional data refresh keys - resets the current keys for that context.
      * - There can be one or many keywords, or true to allow anything (default). If false, then removes needs.
      * - Will match with the given refresh keys or if is nested deeper - ie. starts with the key + "."
      * - By default, will mark the component to be updated if it was changed. If you intend to define multiple in a row, you can set the third parameter to false for all except the very last one.
@@ -1026,16 +1043,16 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
      * - Note that you should also assign the callbacks for uponAction and/or uponQuestion. */
     needsActions<Name extends keyof AllContexts & string>(contextName: Name, actionTypes: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean, extend?: boolean): void;
     /** Set action needs for multiple contexts in one go. It's like multiple needsActions calls as a dictionary: `{ [ctxName]: boolean | actionTypes[]; }`
-     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds.
-     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context. */
+     * - If extendWithinContext is true (is by default), then keeps the other actions defined in the same context. Otherwise resets the action needs in that context.
+     * - If extendForAll is true (is by default), then keeps other contexts intact. Otherwise removes those not found in namedNeeds. */
     needsActionsBy<All extends {
         [Name in keyof AllContexts]: (AllContexts[Name]["Actions"]["type"] & string)[] | boolean;
-    }>(namedNeeds: All, extend?: boolean): void;
+    }>(namedNeeds: All, extendWithinContext?: boolean, extendForAll?: boolean): void;
     /** Set the whole data of the context, and trigger refresh (by default). If the data is an object, can also extend. */
     setData<Name extends keyof AllContexts & string>(contextName: Name, data: Partial<AllContexts[Name]["data"]> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
     setData<Name extends keyof AllContexts & string>(contextName: Name, data: AllContexts[Name]["data"], extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Set a portion of data inside the context data, and trigger refresh (by default). If the sub data is an object, can also extend.
-     * Use the dataKey to define the location as a dotted string. For example: themes.selected */
+     * Use the dataKey to define the location as a dotted string. For example: "themes.selected" */
     setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: Partial<SubData> & Dictionary, extend?: true, refresh?: boolean, forceTimeout?: number | null): void;
     setInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends string, SubData extends PropType<CtxData, DataKey, never>>(contextName: Name, dataKey: DataKey, data: SubData, extend?: boolean, refresh?: boolean, forceTimeout?: number | null): void;
     /** Get the whole context data (directly). */
@@ -1045,10 +1062,10 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
      * Use the dataKey to define the location as a dotted string. For example: "themes.selected" */
     getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, dataKey: DataKey, noContextFallback?: never | undefined): PropType<CtxData, DataKey> | undefined;
     getInData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string, SubData extends PropType<CtxData, DataKey>, FallbackData extends SubData>(contextName: Name, dataKey: DataKey, noContextFallback: FallbackData): SubData;
-    /** Manually trigger refresh for dataKeys in the context.
+    /** Manually trigger refresh with refreshKeys for the given context.
      * Use the refreshKeys to define the location as a dotted string or an array of dotted strings. For example: ["themes.selected", "preferences"] */
     refreshData<Name extends keyof AllContexts & string, CtxData extends AllContexts[Name]["data"], DataKey extends PropType<CtxData, DataKey, never> extends never ? never : string>(contextName: Name, refreshKeys?: boolean | DataKey | DataKey[], forceTimeout?: number | null): void;
-    /** Manually trigger refresh for dataKeys for multiple contexts. (Also see refreshData above.)
+    /** Manually trigger refresh for refreshKeys for multiple contexts. (Also see refreshData above.)
      * - The keys are context names and values define the refresh: boolean | DataKey | DataKey[]. */
     refreshDataBy<All extends {
         [Name in keyof AllContexts]: All[Name] extends boolean ? boolean : All[Name] extends string ? PropType<AllContexts[Name]["data"], All[Name], never> extends never ? never : string : All[Name] extends string[] | readonly string[] ? unknown extends PropType<AllContexts[Name]["data"], All[Name][number]> ? never : string[] | readonly string[] : never;
@@ -1107,28 +1124,31 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     })["type"], Action extends Actions & {
         type: Type;
     }>(contextName: Name, questionType: Type, payload?: undefined, maxAnswers?: number): Action["value"][];
-    /** Check quickly whether has context or not. Rarely needed - uses .getContext internally. */
-    hasContext<Name extends keyof AllContexts & string>(name: Name): boolean;
-    /** Gets the context locally by name.
-     * - Returns undefined if not found, otherwise UIContext | null.
-     * - If includeTunnels is set to false, skips contexts assigned by tunneling (overrideContext call or by attachTunnels prop).
-     * - This is mainly useful, when wanting to send actions from within the component - or perhaps in some special circumstances. */
-    getContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): AllContexts[Name] | null | undefined;
-    /** Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
+    /** Check whether has context or not by name. Rarely needed - uses .getContext internally. */
+    hasContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): boolean;
+    /** Gets the context locally by name. Returns undefined if not found, otherwise UIContext | null.
+     * Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
      *  - Cascading (1): Outer contexts.
      *  - Parent (2): Attached by parent.
-     *  - Overridden (4): Locally overridden. */
+     *  - Overridden (4): Locally overridden.
+     * Note that if specific flags given, the method will only check from those. This means it might return a context that is actually overridden on a higher level of importance. */
+    getContext<Name extends keyof AllContexts & string>(name: Name, onlyTypes?: UIContextAttach): AllContexts[Name] | null | undefined;
+    /** Gets the contexts locally by names. If name not found, not included in the returned dictionary, otherwise the values are UIContext | null.
+     * Give UIContextAttach flags to allow only certain types, and onlyNames to allow only certain names. The flags are:
+     *  - Cascading (1): Outer contexts.
+     *  - Parent (2): Attached by parent.
+     *  - Overridden (4): Locally overridden.
+     * Note that if specific flags given, the method will only check from those. This means it might return context that are actually overridden on a higher level of importance. */
     getContexts<Name extends keyof AllContexts & string>(onlyNames?: RecordableType<Name> | null, onlyTypes?: UIContextAttach): Partial<Record<Name, AllContexts[Name] | null>>;
     /** Override context for this component only without affecting the cascading context flow.
-     * - This will override both: the cascading as well as tunneled (if the parent had used .attachTunnels for us).
-     * - If context is undefined, then will remove the previously set override. Otherwise sets it to the given context or null.
+     * - This will override both: the cascading as well as tunneled (if the parent had used .contexts prop for us).
+     * - If the given context value is undefined, then will remove the previously set override. Otherwise sets it to the given context or null.
      * - This method is most often used by calling createContext with second param, but can be used manually as well. */
-    overrideContext<Name extends keyof AllContexts & string>(name: Name, context: AllContexts[Name] | null | undefined, refresh?: boolean): void;
-    /** Same as overrideContext but for multiple contexts all at once.
-     * - Most often used by .createContexts() if the second param is set to true. */
-    overrideContexts<Name extends keyof AllContexts & string>(contexts: Partial<Record<Name, AllContexts[Name] | null | undefined>>, refresh?: boolean): void;
-    /** This creates a new context - presumably to be attached with .attachTunnels prop.
-     * - If overrideWithName given, then includes this component in the context as well (as if its parent had used .attachTunnels).
+    overrideContext<Name extends keyof AllContexts & string>(name: Name, context: AllContexts[Name] | null | undefined, refreshIfChanged?: boolean): void;
+    /** Same as overrideContext but for multiple contexts all at once. */
+    overrideContexts<Name extends keyof AllContexts & string>(contexts: Partial<Record<Name, AllContexts[Name] | null | undefined>>, refreshIfChanged?: boolean): void;
+    /** This creates a new context - presumably to be attached with .contexts prop.
+     * - If overrideWithName given, then includes this component in the context as well (as if its parent had used .contexts).
      *   .. Note that this is the same as using .overrideContext(name), so it will override any context of the same name for this component. */
     createContext<CtxData extends UIContextData = any, CtxActions extends UIActions = UIActions>(data: CtxData, overrideWithName?: never | "" | undefined, refreshIfOverriden?: never | false): UIContext<CtxData, CtxActions>;
     createContext<Name extends keyof AllContexts & string>(data: AllContexts[Name]["data"], overrideWithName: Name, refreshIfOverriden?: boolean): AllContexts[Name];
@@ -1153,12 +1173,12 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     /** The most important function of a UILive: the render output function. */
     render(props: Props, ui: ThisType<this>): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
     render(): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
-    /** Override this with the actual method to build the context for this particular component. */
+    /** Assign callback to build the remote data for this particular component. */
     buildRemote?(all: UIAllContextsDataWithNull<AllContexts>, contexts: UIAllContextsWithNull<AllContexts>): Remote;
-    /** Override this to listen to actions - originated by sendAction call on the context. */
+    /** Assign callback to listen to actions - originated by sendAction call on the context. */
     uponAction?<Name extends keyof AllContexts & string, Context extends AllContexts[Name]>(action: Context["Actions"], context: Context, name: Name): void;
-    /** Override this to answer to questions - asked by askQuestion call on the context. */
-    uponQuestion?<Name extends keyof AllContexts & string, Context extends AllContexts[Name], Action extends Context["Actions"] & UIQuestion<Action["value"]>>(action: Action, context: Context, name: Name): Action["value"];
+    /** Assign callback to answer to questions - asked by askQuestion call on the context. */
+    uponQuestion?<Name extends keyof AllContexts & string, Context extends AllContexts[Name], Question extends Context["Actions"] & UIQuestion<Question["value"]>>(question: Question, context: Context, name: Name): Question["value"];
     /** Listen to when context assignments change. */
     onContextChange?<Name extends keyof AllContexts & string>(name: Name, newContext: AllContexts[Name] | null, oldContext: AllContexts[Name] | null): boolean | null;
     /** This is a callback that will always be called when the component is checked for updates.
@@ -1179,7 +1199,7 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     uiWillUnmount?(): void;
 }
 declare class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends UILive_base {
-    constructor(props: Props, ...args: any[]);
+    constructor(props: Props, boundary?: UISourceBoundary, ...args: any[]);
 }
 /** Create a UILive functional component. */
 declare const createLive: <Props extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) => UILiveFunction<Props, State, Remote, AllContexts>;
@@ -1224,9 +1244,9 @@ declare class UIContextApi<AllContexts extends UIAllContexts = {}, ContextData e
      * - Returns boolean to indicate whether did change or not. Useful for custom refreshing purposes. */
     needsDataBy(needs: Record<string, boolean | string | string[]>, extend?: boolean, refreshIfChanged?: boolean): boolean;
     /** If undefined, will remove the overridden state. Returns flags for whether contextual refresh should be made. */
-    overrideContext(name: string, context: UIContext | null | undefined, refresh?: boolean): UIContextRefresh;
+    overrideContext(name: string, context: UIContext | null | undefined, refreshIfChanged?: boolean): UIContextRefresh;
     /** Override multiple contexts in one go. Returns flags for whether contextual refresh should be made. */
-    overrideContexts(contexts: Record<string, UIContext | null | undefined>, refresh?: boolean): UIContextRefresh;
+    overrideContexts(contexts: Record<string, UIContext | null | undefined>, refreshIfChanged?: boolean): UIContextRefresh;
     /** Returns undefined if not found, otherwise UIContext | null. */
     getContext(name: string, onlyTypes?: UIContextAttach): UIContext | null | undefined;
     /** Get contexts by types. Give flags to allow only certain types, see UIContextAttach flags. */
@@ -1479,21 +1499,20 @@ declare class UIFragment<Props extends UIFragmentProps = {}> {
 }
 interface UIPortalProps extends UIProps {
     container: Node | null;
-    content?: UIRenderOutput;
 }
 declare class UIPortal<Props extends UIPortalProps = UIPortalProps> {
     static UI_DOM_TYPE: string;
     props: Props;
     constructor(_props: Props);
 }
-declare type UIElementProps<Type extends DomTags = DomTags> = UIProps & UIGenericProps<Type> & {
+declare type UIElementProps<Type extends UIDomTag = UIDomTag> = UIProps & UIGenericProps<Type> & {
     element: HTMLElement | SVGElement | null;
     /** Determines what happens when meeting duplicates.
      * - If == null, uses the uiHost based setting.
      * - If boolean, then is either "deep" or nothing. */
     cloneMode?: boolean | UICloneNodeBehaviour | null;
 };
-declare class UIElement<Type extends DomTags = DomTags, Props extends UIElementProps<Type> = UIElementProps<Type>> {
+declare class UIElement<Type extends UIDomTag = UIDomTag, Props extends UIElementProps<Type> = UIElementProps<Type>> {
     static UI_DOM_TYPE: string;
     props: Props;
     constructor(_props: Props);
@@ -1513,7 +1532,7 @@ declare type HTMLTags = keyof HTMLElementTagNameMap;
 declare type HTMLElementType<Type extends HTMLTags = HTMLTags> = HTMLElementTagNameMap[Type];
 declare type SVGTags = keyof SVGElementTagNameMap;
 declare type SVGElementType<Type extends SVGTags = SVGTags> = SVGElementTagNameMap[Type];
-declare type DomTags = HTMLTags | SVGTags;
+declare type UIDomTag = HTMLTags | SVGTags;
 declare type DomElement = HTMLElement | SVGElement;
 declare type UIDomElementProps = {
     key: any;
@@ -1529,9 +1548,9 @@ declare type ListenerAttributes = {
 };
 declare type HTMLAttributes<Type extends HTMLTags = HTMLTags> = Partial<Omit<HTMLElementType<Type>, "style" | "class" | "className" | "textContent" | "innerHTML" | "outerHTML" | "outerText" | "innerText">> & Partial<ListenerAttributesAll> & Partial<UIDomElementProps>;
 declare type SVGAttributes<Type extends SVGTags = SVGTags> = Omit<SVGAttributesBy[Type], "style" | "class" | "className"> & Partial<ListenerAttributesAll> & Partial<UIDomElementProps>;
-declare type HTMLSVGAttributes<Type extends DomTags = DomTags, Other = never> = [Type] extends [HTMLTags] ? HTMLAttributes<Type> : [Type] extends [SVGTags] ? SVGAttributes<Type> : Other;
+declare type HTMLSVGAttributes<Type extends UIDomTag = UIDomTag, Other = never> = [Type] extends [HTMLTags] ? HTMLAttributes<Type> : [Type] extends [SVGTags] ? SVGAttributes<Type> : Other;
 declare type HTMLSVGAttributesBy = {
-    [Tag in DomTags]: HTMLSVGAttributes<Tag>;
+    [Tag in UIDomTag]: HTMLSVGAttributes<Tag>;
 };
 interface ListenerAttributesAll {
     onAbort: GlobalEventHandlers["onabort"];
@@ -1636,7 +1655,7 @@ declare type UIPreClassName<Valid extends string = string, Single extends string
 declare type UIMiniFunction<Props = {}> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
 declare type UILiveFunction<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
 declare type UILiveComponent<Props = {}, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
-declare type UISpreadFunction<Props = {}> = (props: Props) => UIRenderOutput;
+declare type UISpreadFunction<Props = {}> = (props: Props, childDefs: UIDefTarget[]) => UIRenderOutput;
 declare type UIFunction<Props = {}> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
 declare type UIBoundableFunction<Props = {}> = UILiveFunction<Props> | UIMiniFunction<Props>;
 /** This is a shortcut for UIDom renderers that will be have their own boundary:
@@ -1649,7 +1668,6 @@ declare type UIBoundable<Props = {}> = typeof UILive<Props> | typeof UIMini<Prop
 declare type UIComponent<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | UIWiredType<Props> | typeof UISpread<Props> | UIFunction<Props>;
 declare type UIBoundary = UISourceBoundary | UIContentBoundary;
 declare type UISourceBoundaryId = string;
-declare type UIDomTag = DomTags;
 declare type UIPseudoTag<Props = {}> = typeof UIFragment<Props> | ([Props] extends [UIContextsProps] ? typeof UIContexts<{}, Props> : never) | ([Props] extends [UIElementProps] ? typeof UIElement<HTMLTags | SVGTags, Props> : never) | ([Props] extends [UIPortalProps] ? typeof UIPortal<Props> : never);
 declare type UIComponentTag<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | typeof UISpread<Props> | UIWiredType<Props> | UIPseudoTag<Props> | UIFunction<Props>;
 declare type UIPreTag = UIDomTag | UIPseudoTag | UIComponentTag;
@@ -1745,7 +1763,7 @@ declare type UIDomProps<T = {}> = UIProps<T> & {
     style?: CSSProperties | string;
     data?: Dictionary;
 } & T;
-declare type UIGenericProps<Type extends DomTags = DomTags, T = {}> = UIDomProps & HTMLSVGAttributes<Type, {}> & ListenerAttributes & T;
+declare type UIGenericProps<Type extends UIDomTag = UIDomTag, T = {}> = UIDomProps & HTMLSVGAttributes<Type, {}> & ListenerAttributes & T;
 /** Post props don't contain key, ref. In addition className and class have been merged, and style processed to a dictionary. */
 declare type UIGenericPostProps<Props = {}> = Props & {
     className?: string;
@@ -2055,7 +2073,7 @@ interface UIContentEnvelope {
 declare type UICloneNodeBehaviour = "deep" | "shallow" | "always";
 declare type UIRenderTextTagCallback = (text: string | number) => Node | null;
 declare type UIRenderTextContentCallback = (text: string | number) => string | number;
-declare type UIRenderTextTag = keyof HTMLElementTagNameMap | "" | UIRenderTextTagCallback;
+declare type UIRenderTextTag = UIDomTag | "" | UIRenderTextTagCallback;
 interface UIHostSettingsUpdate extends Partial<Omit<UIHostSettings, "updateLiveModes">> {
     updateLiveModes?: Partial<UIHostSettings["updateLiveModes"]>;
 }
@@ -2123,7 +2141,7 @@ interface UIHostSettings {
     renderTextTag: UIRenderTextTag;
     /** Tag to use for as a fallback when using the uiDom.htmlDef feature (that uses .innerHTML on a dummy element). Defaults to "span".
      * - It only has meaning, if the output contains multiple elements and didn't specifically define the container tag to use. */
-    renderHtmlDefTag: keyof HTMLElementTagNameMap;
+    renderHtmlDefTag: UIDomTag;
     /** If you want to process the simple content text, assign a callback here. */
     renderTextContent: UIRenderTextContentCallback | null;
     /** This defines how UIDom will treat "simple content". The options are:
@@ -2213,7 +2231,7 @@ declare type ValidateNames<Valid extends string> = <T1 extends NameValidator<Val
 
 declare class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps> {
     static UI_DOM_TYPE: string;
-    static uiBoundaries: Set<UISourceBoundary>;
+    static components: Set<UIMini>;
     static source: UIComponent;
     static builder: ((...params: any[]) => Dictionary) | null;
     static mixer: ((baseProps: Dictionary, addedProps: Dictionary, ...params: any[]) => Dictionary) | null;
@@ -2224,14 +2242,14 @@ declare class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProp
     static getAddedProps(): Record<string, any>;
     static getMixedProps(_props: Dictionary): Record<string, any>;
     static updateMode: UIUpdateCompareMode | null;
-    static uiWillMount?(boundary: UIMiniBoundary): void;
-    static uiDidMount?(boundary: UIMiniBoundary): void;
-    static uiShouldUpdate?(boundary: UIMiniBoundary, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
-    static uiBeforeUpdate?(boundary: UIMiniBoundary, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
-    static uiDidUpdate?(boundary: UIMiniBoundary, prevProps: Dictionary | null, newProps: Dictionary | null): void;
-    static uiDidMove?(boundary: UIMiniBoundary): void;
-    static uiWillUnmount?(boundary: UIMiniBoundary): void;
-    constructor(props: BaseProps, updateMode?: UIUpdateCompareMode | null);
+    static uiWillMount?(mini: UIMini): void;
+    static uiDidMount?(mini: UIMini): void;
+    static uiShouldUpdate?(mini: UIMini, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
+    static uiBeforeUpdate?(mini: UIMini, preProps: Dictionary | null, newProps: Dictionary | null, willUpdate: boolean): void;
+    static uiDidUpdate?(mini: UIMini, prevProps: Dictionary | null, newProps: Dictionary | null): void;
+    static uiDidMove?(mini: UIMini): void;
+    static uiWillUnmount?(mini: UIMini): void;
+    constructor(props: BaseProps, boundary?: UISourceBoundary);
     render(): UIRenderOutput;
 }
 /** The static class type for UIWired that is extended when creates a wired source.
@@ -2239,8 +2257,8 @@ declare class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProp
 declare type UIWiredType<BaseProps = {}, AddedProps = {}, MixedProps = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps> = {
     readonly UI_DOM_TYPE: "Wired";
     new (_props?: BaseProps | null): UIWired<BaseProps>;
-    /** The currently instanced boundaries that have a QWire class instance as their boundary.mini. */
-    uiBoundaries: Set<UISourceBoundary>;
+    /** The currently instanced components that using our custom class wired class as their constructor. */
+    components: Set<UIMini>;
     source: UIComponent;
     builder: Builder | null;
     mixer: Mixer | null;
@@ -2259,18 +2277,18 @@ declare type UIWiredType<BaseProps = {}, AddedProps = {}, MixedProps = BaseProps
     /** Call this to manually update the wired part of props and force a refresh.
      * - This is most often called by the static refresh method above, with props coming from Wired.builder. */
     setProps(props: AddedProps, update?: boolean, forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void;
-    /** Special call for wired only - called right after constructing the wired instance. You can access the mini instance by boundary.mini. */
-    uiWillMount?(boundary: UIMiniBoundary<BaseProps>): void;
-    uiDidMount?(boundary: UIMiniBoundary<BaseProps>): void;
+    /** Special call for wired only - called right after constructing the wired instance. */
+    uiWillMount?(mini: UIMini<BaseProps>): void;
+    uiDidMount?(mini: UIMini<BaseProps>): void;
     /** On wired, the static .uiShouldUpdate is not called if the instance had .uiShouldUpdate and it returned a boolean.
      * - Otherwise, this is called and can affect the outcome normally. */
-    uiShouldUpdate?(boundary: UIMiniBoundary<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
-    uiBeforeUpdate?(boundary: UIMiniBoundary<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
-    uiDidUpdate?(boundary: UIMiniBoundary<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
-    uiDidMove?(boundary: UIMiniBoundary<BaseProps>): void;
-    uiWillUnmount?(boundary: UIMiniBoundary<BaseProps>): void;
+    uiShouldUpdate?(mini: UIMini<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null): boolean | null;
+    uiBeforeUpdate?(mini: UIMini<BaseProps>, preProps: BaseProps | null, newProps: BaseProps | null, willUpdate: boolean): void;
+    uiDidUpdate?(mini: UIMini<BaseProps>, prevProps: BaseProps | null, newProps: BaseProps | null): void;
+    uiDidMove?(mini: UIMini<BaseProps>): void;
+    uiWillUnmount?(mini: UIMini<BaseProps>): void;
 };
-declare const createWired: <BaseProps extends Dictionary<string, any> = {}, AddedProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps?: AddedProps | Builder | null | undefined, mixer?: Mixer | undefined, ...params: Params) => UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer>;
+declare const createWired: <BaseProps extends Dictionary<string, any> = {}, AddedProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps?: AddedProps | Builder | null | undefined, mixer?: Mixer | null | undefined, ...params: Params) => UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer>;
 
 declare type DataExtractor<P extends any[] = any[], R = any> = (...args: P) => R;
 /** This helps to create a fully typed data picker with one extractor that outputs an array.
@@ -2304,7 +2322,7 @@ declare const UIEffect_base: {
         reset(effect: UIEffectOnMount<any> | null, memory: any, forceRun?: boolean): boolean;
         use(memory: any, forceRun?: boolean, newEffectIfChanged?: UIEffectOnMount<any> | null | undefined): boolean;
         /** Cancel effect. */
-        cancel(skipUnmount?: boolean, clearEffect?: boolean): void;
+        cancel(runUnmount?: boolean, clearEffect?: boolean): void;
         constructor: Function;
         toString(): string;
         toLocaleString(): string;
@@ -2351,7 +2369,8 @@ declare const createEffect: <Memory = any>(effect?: UIEffectOnMount<Memory> | un
  */
 declare const UIEffectMixin: ClassBaseMixer<UIEffect<any>>;
 
-declare function createDef<DomTag extends DomTags>(domTag: DomTag, origProps?: HTMLSVGAttributes<DomTag> | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+/** Create a rendering definition. Supports receive direct JSX compiled output. */
+declare function createDef<DomTag extends UIDomTag>(domTag: DomTag, origProps?: HTMLSVGAttributes<DomTag> | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
 declare function createDef<Props extends Dictionary = {}>(componentTag: UIComponentTag<Props>, origProps?: (Props & UIComponentProps) | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
 
 declare const uiDef: typeof createDef;
@@ -2444,42 +2463,42 @@ declare const uiDom: {
     createMini: <Props_3 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */
     mini: <Props_3 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
-    /** Creates a wired renderer.
-     * - Technically creates a class that behaves like UILive (or actually more like UIMiniFunction as a class).
-     *     1. This class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
-     *     2. This class can then allow to set and refresh the common props, and trigger should-updates for all the instances.
-     *     3. The props of the actual class instances are mixed with the wiredProps defined by this class.
+    /** Creates a wired component.
+     * - Technically creates a custom class that extends UIMini.
+     *     1. This custom class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
+     *     2. This class then allows to set and refresh the common props, and trigger should-updates for all the instances.
+     *     3. The props of the actual class instances are mixed with the addedProps defined by this class.
      * - About builder function:
      *     * The (2nd arg) builder is a callback to build common props, it receives: (lastProps, ...passParams).
      *     * The passParams are any optional arguments after the 3rd one (mixer).
      *     * It can return the lastProps back, if there's no change. In that case won't trigger update.
      */
-    createWired: <BaseProps extends Dictionary<string, any> = {}, AddedProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps?: AddedProps | Builder | null | undefined, mixer?: Mixer | undefined, ...params: Params) => UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer>;
+    createWired: <BaseProps extends Dictionary<string, any> = {}, AddedProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps?: AddedProps | Builder | null | undefined, mixer?: Mixer | null | undefined, ...params: Params) => UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer>;
     /** Creates a wired renderer.
-     * - Technically creates a class that behaves like UILive (or actually more like UIMiniFunction as a class).
-     *     1. This class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
-     *     2. This class can then allow to set and refresh the common props, and trigger should-updates for all the instances.
-     *     3. The props of the actual class instances are mixed with the wiredProps defined by this class.
+     * - Technically creates a custom class that extends UIMini.
+     *     1. This custom class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
+     *     2. This class then allows to set and refresh the common props, and trigger should-updates for all the instances.
+     *     3. The props of the actual class instances are mixed with the addedProps defined by this class.
      * - About builder function:
      *     * The (2nd arg) builder is a callback to build common props, it receives: (lastProps, ...passParams).
      *     * The passParams are any optional arguments after the 3rd one (mixer).
      *     * It can return the lastProps back, if there's no change. In that case won't trigger update.
      */
-    wired: <BaseProps extends Dictionary<string, any> = {}, AddedProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps?: AddedProps | Builder | null | undefined, mixer?: Mixer | undefined, ...params: Params) => UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer>;
+    wired: <BaseProps extends Dictionary<string, any> = {}, AddedProps extends Dictionary<string, any> = {}, MixedProps extends Dictionary<string, any> = BaseProps & AddedProps, Params extends any[] = any[], Builder extends (lastProps: AddedProps | null, ...params: Params) => AddedProps = (lastProps: AddedProps | null, ...params: Params) => AddedProps, Mixer extends (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addedProps: AddedProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps?: AddedProps | Builder | null | undefined, mixer?: Mixer | null | undefined, ...params: Params) => UIWiredType<BaseProps, AddedProps, MixedProps, Params, Builder, Mixer>;
     /** Create a new def, like React.createElement(). Can feed JSX input. */
     createDef: typeof createDef;
     /** Alias for createDef for brevity. */
     def: typeof createDef;
     /** Returns a single html element.
      * - If a wrapInTag given will use it as a container.
-     * - Otherwise, if the string refers to multiple, returns an element containing them (with settings.renderInnerHtmlTag).
+     * - Otherwise, if the string refers to multiple, returns an element containing them (with settings.renderHtmlDefTag).
      * - Normally uses a container only as a fallback if has many children. */
-    htmlDef: (innerHtml: string, wrapInTag?: keyof HTMLElementTagNameMap, props?: UIDomProps, key?: any) => UIDefTarget;
-    findTreeNodesIn: (treeNode: UITreeNode, types: RecordableType<UITreeNodeType>, maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined) => UITreeNode[];
-    findBoundariesIn: (treeNode: UITreeNode, maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined) => UISourceBoundary[];
-    findDomNodesIn: <T extends Node = Node>(treeNode: UITreeNode, maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined) => T[];
-    queryDomElementIn: <T_1 extends Element = Element>(treeNode: UITreeNode, selector: string, allowWithinBoundaries?: boolean, allowOverHosts?: boolean) => T_1 | null;
-    queryDomElementsIn: <T_2 extends Element = Element>(treeNode: UITreeNode, selector: string, maxCount?: number, allowWithinBoundaries?: boolean, allowOverHosts?: boolean) => T_2[];
+    htmlDef: (innerHtml: string, wrapInTag?: UIDomTag, props?: UIDomProps, key?: any) => UIDefTarget;
+    findTreeNodesIn: (treeNode: UITreeNode, types?: RecordableType<UITreeNodeType>, maxCount?: number, inNested?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined) => UITreeNode[];
+    findComponentsIn: <Component extends UIComponent<{}> = UIComponent<{}>>(treeNode: UITreeNode, maxCount?: number, inNested?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined) => Component[];
+    findDomNodesIn: <T extends Node = Node>(treeNode: UITreeNode, maxCount?: number, inNested?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined) => T[];
+    queryDomElementIn: <T_1 extends Element = Element>(treeNode: UITreeNode, selector: string, inNested?: boolean, overHosts?: boolean) => T_1 | null;
+    queryDomElementsIn: <T_2 extends Element = Element>(treeNode: UITreeNode, selector: string, maxCount?: number, inNested?: boolean, overHosts?: boolean) => T_2[];
     /** Returns a string to be used as class name (with no duplicates and optional nested TypeScript verification).
      * - Each item in the classNames can be:
      *     1. ValidName (single className string),
@@ -2497,7 +2516,7 @@ declare const uiDom: {
      * - The dictionary format is used for easy detection of changes.
      *   .. As we want to respect any external changes and just modify based on our own. (For style, class and any attributes.) */
     parseStyle: (cssText: string) => CSSProperties;
-    /** General inlined equal with level for deepness.
+    /** General equal comparison with level for deepness.
      * - nDepth: 0. No depth - simple check.
      * - nDepth: 1. Shallow equal.
      * - nDepth: 2. Shallow double equal.
@@ -2514,7 +2533,7 @@ declare const uiDom: {
      * - range(1, -2) => [0, -1, -2]
      * - range(-3) => [-1, -2, -3]
      */
-    range: (lengthOrStart: number, end?: number | undefined, stepSize?: number) => number[];
+    range: (start: number, end?: number | null | undefined, stepSize?: number) => number[];
 };
 
 declare namespace JSX {
@@ -2524,4 +2543,4 @@ declare namespace JSX {
     }
 }
 
-export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, CreateDataPicker, CreateDataSelector, DataExtractor, Dictionary, DomElement, DomTags, HTMLAttributes, HTMLElementType, HTMLSVGAttributes, HTMLSVGAttributesBy, HTMLTags, JSX, ListenerAttributeNames, ListenerAttributes, ListenerAttributesAll, NameValidator, NonDictionary, NullLike, PropType, RecordableType, SVGAriaAttributes, SVGAttributes, SVGAttributesBy, SVGCoreAttributes, SVGElementType, SVGGeneralAttributes, SVGGlobalAttributes, SVGGraphicalEventAttributes, SVGNativeAttributes, SVGPresentationalAttributes, SVGStylingAttributes, SVGTags, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBuildRemoteParams, UIChangeInfos, UICloneNodeBehaviour, UICompareDepthByMode, UIComponent, UIComponentProps, UIComponentTag, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomElementProps, UIDomProps, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveBoundary, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniBoundary, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIPseudoTag, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UIRenderTextContentCallback, UIRenderTextTag, UIRenderTextTagCallback, UISourceBoundary, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createDataPicker, createDataSelector, createDef, createEffect, createHost, createLive, createMini, createRef, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };
+export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, CreateDataPicker, CreateDataSelector, DataExtractor, Dictionary, DomElement, HTMLAttributes, HTMLElementType, HTMLSVGAttributes, HTMLSVGAttributesBy, HTMLTags, JSX, ListenerAttributeNames, ListenerAttributes, ListenerAttributesAll, NameValidator, NonDictionary, NullLike, PropType, RecordableType, SVGAriaAttributes, SVGAttributes, SVGAttributesBy, SVGCoreAttributes, SVGElementType, SVGGeneralAttributes, SVGGlobalAttributes, SVGGraphicalEventAttributes, SVGNativeAttributes, SVGPresentationalAttributes, SVGStylingAttributes, SVGTags, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBuildRemoteParams, UIChangeInfos, UICloneNodeBehaviour, UICompareDepthByMode, UIComponent, UIComponentProps, UIComponentTag, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomElementProps, UIDomProps, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveBoundary, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniBoundary, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIPseudoTag, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UIRenderTextContentCallback, UIRenderTextTag, UIRenderTextTagCallback, UISourceBoundary, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createDataPicker, createDataSelector, createDef, createEffect, createHost, createLive, createMini, createRef, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };

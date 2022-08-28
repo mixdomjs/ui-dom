@@ -35,19 +35,19 @@ export const _Lib = {
      * - range(1, -2) => [0, -1, -2]
      * - range(-3) => [-1, -2, -3]
      */
-    range(lengthOrStart: number, end?: number, stepSize: number = 1): number[] {
+    range(start: number, end?: number | null, stepSize: number = 1): number[] {
         // Only length given.
-        if (typeof end !== "number")
-            [end, lengthOrStart] = [lengthOrStart, 0];
+        if (end == null)
+            [end, start] = [start, 0];
         // Go in reverse.
         const range: number[] = [];
-        if (end < lengthOrStart) {
-            for (let i=lengthOrStart-1; i>=end; i -= stepSize)
+        if (end < start) {
+            for (let i=start-1; i>=end; i -= stepSize)
                 range.push(i);
         }
         // Fill directly.
         else
-            for (let i=lengthOrStart; i<end; i += stepSize)
+            for (let i=start; i<end; i += stepSize)
                 range.push(i);
         // Return range.
         return range;
@@ -117,7 +117,7 @@ export const _Lib = {
      *     1. ValidName (single className string),
      *     2. Array<ValidName>,
      *     3. Record<ValidName, any>.
-     *     + If you want to use the validation only for Arrays and Records but not Strings, add 2nd parameter `string` to the type: `CleanClassName<ValidName, string>`
+     *     + If you want to use the validation only for Arrays and Records but not Strings, add 2nd parameter `string` to the type: `classNames<ValidName, string>`
      * - Unfortunately, the name validation inputted here only works for Array and Record types, and single strings.
      * - To use concatenated class name strings (eg. "bold italic"), you should:
      *     1. Declare a validator by: `const classNames: ValidateNames<ValidName> = uiDom.classNames;`

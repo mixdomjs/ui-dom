@@ -7,7 +7,6 @@ import {
     UITreeNodeDom,
     UITreeNodeType,
     UIBoundary,
-    RecordableType,
 } from "./_Types";
 import { _Defs } from "./_Defs";
 import { UIContentBoundary, UISourceBoundary } from "../classes/UIBoundary";
@@ -127,9 +126,13 @@ export const _Find = {
 
     // - Shortcuts - //
 
-    findTreeNodes(treeNode: UITreeNode, types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
-        return _Find.treeNodesWithin(treeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator);
-    },
+    // treeNodesIn(treeNode: UITreeNode, types: RecordableType<UITreeNodeType>, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
+    //     return _Find.treeNodesWithin(treeNode, _Lib.buildRecordable<UITreeNodeType>(types), maxCount, allowWithinBoundaries, allowOverHosts, validator);
+    // },
+    //
+    // componentsIn<Component extends UIComponent = UIComponent>(treeNode: UITreeNode, maxCount: number = 0, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Component[] {
+    //     return _Find.treeNodesWithin(treeNode, { boundary: true }, maxCount, allowWithinBoundaries, allowOverHosts, validator).map(t => (t.boundary && (t.boundary.live || t.boundary.mini)) as unknown as Component);
+    // },
 
     domElementByQuery<T extends Element = Element>(treeNode: UITreeNode, selectors: string, allowWithinBoundaries: boolean = false, allowOverHosts: boolean = false): T | null {
         const validator = (tNode: UITreeNode) => tNode.domNode && tNode.domNode instanceof Element && tNode.domNode.matches(selectors);

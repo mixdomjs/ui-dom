@@ -2,6 +2,8 @@
 
 // - Imports - //
 
+import { _Find } from "../static/_Find";
+import { _Lib } from "../static/_Lib";
 import {
     Dictionary,
     ClassType,
@@ -10,8 +12,13 @@ import {
     UIMiniFunction,
     UIRenderOutput,
     UIUpdateCompareMode,
+    RecordableType,
+    UITreeNodeType,
+    UITreeNode,
+    UIComponent,
 } from "../static/_Types";
 import { uiDom } from "../uiDom";
+import { UIMiniBoundary, UISourceBoundary } from "./UIBoundary";
 
 function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
@@ -23,34 +30,76 @@ function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
         // - Members - //
 
+        public readonly uiBoundary: UIMiniBoundary;
         public readonly props: Props;
         public updateMode: UIUpdateCompareMode | null;
 
         // - Methods - //
 
-        constructor(props: Props, updateMode: UIUpdateCompareMode | null = null, ...passArgs: any[]) {
+        constructor(props: Props, boundary?: UISourceBoundary, ...passArgs: any[]) {
             // We are a mixin.
             super(...passArgs);
             // Set from args.
             this.props = props;
-            this.updateMode = updateMode;
+            if (boundary) {
+                this.uiBoundary = boundary as UIMiniBoundary;
+                boundary.mini = this as UIMini;
+            }
         }
+
+        // - Update mode - //
+
         public setUpdateMode(updateMode: UIUpdateCompareMode | null): void {
             this.updateMode = updateMode;
         }
 
-        // - Methods that are set by the boundary - //
+        // - Content api - //
+
+        public getChildren(skipNeeds: boolean = false, shallowCopy: boolean = false): Readonly<UIDefTarget[]> {
+            return this.uiBoundary.contentApi.getChildren(skipNeeds, shallowCopy) || [];
+        }
+        public needsChildren(needs?: boolean | "temp" | null): void {
+            this.uiBoundary.contentApi.needsChildren(needs);
+        }
+
+        // - Getters - //
+
+        public isMounted(): boolean {
+            return this.uiBoundary.isMounted === true;
+        }
+
+        public queryDomElement(selector: string, withinBoundaries: boolean = false, overHosts: boolean = false): Element | null {
+            return _Find.domElementByQuery(this.uiBoundary.treeNode, selector, withinBoundaries, overHosts);
+        }
+
+        public queryDomElements(selector: string, maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false): Element[] {
+            return _Find.domElementsByQuery(this.uiBoundary.treeNode, selector, maxCount, withinBoundaries, overHosts);
+        }
+
+        public findDomNodes(maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Node[] {
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { dom: true }, maxCount, withinBoundaries, overHosts, validator).map(tNode => tNode.domNode) as Node[];
+        }
+
+        public findComponents<Component extends UIComponent = UIComponent>(maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): Component[] {
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, { boundary: true }, maxCount, withinBoundaries, overHosts, validator).map(t => (t.boundary && (t.boundary.live || t.boundary.mini)) as unknown as Component);
+        }
+
+        public findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount: number = 0, withinBoundaries: boolean = false, overHosts: boolean = false, validator?: (treeNode: UITreeNode) => any): UITreeNode[] {
+            return _Find.treeNodesWithin(this.uiBoundary.treeNode, types && _Lib.buildRecordable<UITreeNodeType>(types), maxCount, withinBoundaries, overHosts, validator);
+        }
+
+        // - Render - //
 
         public render(_props: Props): UIRenderOutput | UIMiniFunction<Props> { return uiDom.Content; }
-        public isMounted(): boolean { return false; }
-        public getChildren(_skipNeeds: boolean = false, _shallowCopy: boolean = true): Readonly<UIDefTarget[]> { return []; }
-        public needsChildren(_needs?: boolean | "temp" | null): void {}
 
     }
 }
 export interface UIMini<Props extends Dictionary = {}> {
 
     // - Members - //
+
+    /** Ref to the dedicated boundary. */
+    uiBoundary: UIMiniBoundary;
 
     /** Fresh props. */
     readonly props: Props;
@@ -63,21 +112,25 @@ export interface UIMini<Props extends Dictionary = {}> {
     updateMode: UIUpdateCompareMode | null;
 
 
-    // - Methods that are set by the boundary - //
+    // - Update mode - //
 
     /** Set the update mode for this particular renderer instance.
      * - If null uses settings.updateMiniMode from uiHost.
      * - Note that you can also assign the .uiShouldUpdate method to affect this. */
     setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
 
-    /** Whether the component has mounted or not. */
+
+    // - Getters - //
+
     isMounted(): boolean;
+    queryDomElement<T extends Element = Element>(selector: string, withinBoundaries?: boolean, overHosts?: boolean): T | null;
+    queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): T[];
+    findDomNodes<T extends Node = Node>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): T[];
+    findComponents<Component extends UIComponent = UIComponent>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): Component[];
+    findTreeNodes(types?: RecordableType<UITreeNodeType>, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: (treeNode: UITreeNode) => any): UITreeNode[];
 
-    /** The renderer will be assigned here. */
-    render(props: Props): UIRenderOutput | UIMiniFunction<Props>;
 
-
-    // - Methods - //
+    // - Children - //
 
     /** Get the actual contentPass childDefs. If used will mark needsChildren temporarily (until next render).
      *   .. When used, reads the children from the content pass.
@@ -91,6 +144,12 @@ export interface UIMini<Props extends Dictionary = {}> {
      * - If boolean given it forces the mode.
      * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
     needsChildren(needs?: boolean | "temp" | null): void;
+
+
+    // - Render - //
+
+    /** The renderer will be assigned here. */
+    render(props: Props): UIRenderOutput | UIMiniFunction<Props>;
 
 
     // - Callbacks - //
@@ -113,25 +172,11 @@ export interface UIMini<Props extends Dictionary = {}> {
     uiDidUpdate?(prevProps: Props | null, newProps: Props | null): void;
     uiWillUnmount?(): void;
 
-    // /** This is a callback that will always be called when the component is checked for updates.
-    //  * - Note that this is not called on mount, but will be called everytime on update, even if will not actually update (use the 3rd param).
-    //  * - Note that this will be called after uiShouldUpdate (if that is called) and right before the update happens.
-    //  * - Note that by this time all the data has been updated already. So use preUpdates to get what it was before. */
-    // beforeUpdate?(prevProps: Props | null, newProps: Props | null, willUpdate: boolean): void;
-    //
-    // <-- Dropped. Because, then would like the full life cycle, too.
-    // ... And then should just make UILive extend UIMini and fatten the shouldUpdate { props, children } and unify contextApi usage.
-
-
 }
-// export declare class UIMini<Props extends Dictionary = {}> extends _UIMiniMixin(Object) {
-//     // Needed for TSX.
-//     constructor(props: Props, updateMode?: UIUpdateCompareMode | null);
-// }
 
 export class UIMini<Props extends Dictionary = {}> extends _UIMiniMixin(Object) {
     // Needed for TSX.
-    constructor(props: Props, updateMode: UIUpdateCompareMode | null = null) { super(props, updateMode); }
+    constructor(props: Props, boundary?: UISourceBoundary) { super(props, boundary); }
 }
 
 export const createMini = <Props extends Dictionary = {}>( func: (mini: UIMini<Props>, props: Props) => ReturnType<UIMiniFunction<Props>>): UIMiniFunction<Props> =>

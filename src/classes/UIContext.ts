@@ -15,8 +15,8 @@ import {
     UIQuestion,
     UIQuestionary,
     UIContextData,
-    UIAllContexts,
     ClassBaseMixer,
+    UIAllContextsWithNull,
 } from "../static/_Types";
 import { UILiveBoundary } from "./UIBoundary";
 import { UIContextServices } from "./UIContextServices";
@@ -423,17 +423,17 @@ export const UIContextMixin = _UIContextMixin as ClassBaseMixer<UIContext>;
 
 // - Multi - //
 
-export type UIContextsProps<AllContexts extends UIAllContexts = {}> = {
+export type UIContextsProps<AllContexts extends UIAllContextsWithNull = {}> = {
     /** Include many named contexts. */
     cascade: AllContexts | null;
 }
-export class UIContexts<AllContexts extends UIAllContexts = {}, Props extends UIContextsProps = UIContextsProps> {
+export class UIContexts<AllContexts extends UIAllContextsWithNull = {}, Props extends UIContextsProps = UIContextsProps> {
     public static UI_DOM_TYPE = "Contexts";
     contexts: AllContexts;
     props: Props;
     constructor(_props: Props) { }
 }
-export type UIContextsType<AllContexts extends UIAllContexts = {}> = ClassType<UIContexts<AllContexts>, [UIContextsProps]> & {
+export type UIContextsType<AllContexts extends UIAllContextsWithNull = {}> = ClassType<UIContexts<AllContexts>, [UIContextsProps]> & {
     readonly UI_DOM_TYPE: "Contexts";
 }
 /** Create multiple named contexts. (Useful for tunneling.) */

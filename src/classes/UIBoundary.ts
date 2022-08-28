@@ -303,7 +303,7 @@ export class UISourceBoundary extends UIBaseBoundary {
                     break;
             }
             // Prepare for contentApi.
-            const readChildren = Live || Mini ? (shallowCopy: boolean = true): UIDefTarget[] | null => {
+            const readChildren = Live || Mini ? (shallowCopy: boolean = false): UIDefTarget[] | null => {
                 const defs = this.closure.envelope?.targetDef.childDefs || null;
                 return defs && (shallowCopy ? defs.slice() : defs);
             } : null;
@@ -316,7 +316,7 @@ export class UISourceBoundary extends UIBaseBoundary {
                 this.live = new Live(this._outerDef.props || {}, this);
                 if (renderer)
                     this.live.render = renderer as UILive["render"];
-                // Note. In case uses contextual needs in the constructor, should pass the 2nd arg as well: super(props, boundary).
+                // Note. In case uses contextApi or contentApi in the constructor, should pass the 2nd arg as well: super(props, boundary).
                 // .. This way, it's all handled and ready, and there's no need to add special checks or do some initial "flushing".
                 if (!this.live.uiBoundary)
                     // We set a readonly value here - it's on purpose: it's only set if wasn't set in the constructor (by not being passed to super).
@@ -327,19 +327,20 @@ export class UISourceBoundary extends UIBaseBoundary {
                 // Content api.
                 this.contentApi = new UIContentApi(readChildren);
                 // Constructor and assign renderer.
-                this.mini = new Mini(this._outerDef.props || {});
+                this.mini = new Mini(this._outerDef.props || {}, this);
                 if (renderer)
                     this.mini.render = renderer as UIMiniFunction;
-                // Assign encapsulated by boundary.
-                this.mini.isMounted = (): boolean => this.isMounted === true;
-                this.mini.getChildren = this.contentApi.getChildren.bind(this.contentApi);
-                this.mini.needsChildren = this.contentApi.needsChildren.bind(this.contentApi);
+                // Note. In case uses contentApi needs in the constructor, should pass the 2nd arg as well: super(props, boundary).
+                // .. This way, it's all handled and ready, and there's no need to add special checks or do some initial "flushing".
+                if (!this.mini.uiBoundary)
+                    // We set a readonly value here - it's on purpose: it's only set if wasn't set in the constructor (by not being passed to super).
+                    (this.mini as { uiBoundary: UIMiniBoundary }).uiBoundary = this as UIMiniBoundary;
                 // Handle Wired.
                 if (this.type === "class-wired") {
                     const Wired = Mini as UIWiredType;
-                    Wired.uiBoundaries.add(this);
+                    Wired.components.add(this.mini);
                     if (Wired.uiWillMount)
-                        Wired.uiWillMount(this as UIMiniBoundary);
+                        Wired.uiWillMount(this.mini);
                 }
             }
         }

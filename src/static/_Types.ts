@@ -50,7 +50,7 @@ export type HTMLTags = keyof HTMLElementTagNameMap;
 export type HTMLElementType<Type extends HTMLTags = HTMLTags> = HTMLElementTagNameMap[Type];
 export type SVGTags = keyof SVGElementTagNameMap;
 export type SVGElementType<Type extends SVGTags = SVGTags> = SVGElementTagNameMap[Type];
-export type DomTags = HTMLTags | SVGTags;
+export type UIDomTag = HTMLTags | SVGTags;
 
 export type DomElement = HTMLElement | SVGElement;
 export type UIDomElementProps = {
@@ -68,8 +68,8 @@ export type ListenerAttributeNames = keyof ListenerAttributesAll;
 export type ListenerAttributes = { [Name in keyof ListenerAttributesAll]?: ListenerAttributesAll[Name] | null; };
 export type HTMLAttributes<Type extends HTMLTags = HTMLTags> = Partial<Omit<HTMLElementType<Type>, "style" | "class" | "className" | "textContent" | "innerHTML" | "outerHTML" | "outerText" | "innerText">> & Partial<ListenerAttributesAll> & Partial<UIDomElementProps>;
 export type SVGAttributes<Type extends SVGTags = SVGTags> = Omit<SVGAttributesBy[Type], "style" | "class" | "className"> & Partial<ListenerAttributesAll> & Partial<UIDomElementProps>;
-export type HTMLSVGAttributes<Type extends DomTags = DomTags, Other = never> = [Type] extends [HTMLTags] ? HTMLAttributes<Type> : [Type] extends [SVGTags] ? SVGAttributes<Type> : Other;
-export type HTMLSVGAttributesBy = { [Tag in DomTags]: HTMLSVGAttributes<Tag> };
+export type HTMLSVGAttributes<Type extends UIDomTag = UIDomTag, Other = never> = [Type] extends [HTMLTags] ? HTMLAttributes<Type> : [Type] extends [SVGTags] ? SVGAttributes<Type> : Other;
+export type HTMLSVGAttributesBy = { [Tag in UIDomTag]: HTMLSVGAttributes<Tag> };
 
 export interface ListenerAttributesAll {
     onAbort: GlobalEventHandlers["onabort"];
@@ -187,7 +187,7 @@ export type UIPreClassName<Valid extends string = string, Single extends string 
 export type UIMiniFunction<Props = {}> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
 export type UILiveFunction<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
 export type UILiveComponent<Props = {}, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
-export type UISpreadFunction<Props = {}> = (props: Props) => UIRenderOutput;
+export type UISpreadFunction<Props = {}> = (props: Props, childDefs: UIDefTarget[]) => UIRenderOutput;
 export type UIFunction<Props = {}> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
 
 export type UIBoundableFunction<Props = {}> = UILiveFunction<Props> | UIMiniFunction<Props>;
@@ -206,7 +206,6 @@ export type UISourceBoundaryId = string;
 
 // - Tags - //
 
-export type UIDomTag = DomTags;
 export type UIPseudoTag<Props = {}> = typeof UIFragment<Props> | ([Props] extends [UIContextsProps] ? typeof UIContexts<{}, Props> : never) | ([Props] extends [UIElementProps] ? typeof UIElement<HTMLTags | SVGTags, Props> : never) | ([Props] extends [UIPortalProps] ? typeof UIPortal<Props> : never);
 // export type UIComponentTag<Props = {}> = UIComponent<Props>;
 export type UIComponentTag<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | typeof UISpread<Props> | UIWiredType<Props> | UIPseudoTag<Props> | UIFunction<Props>;
@@ -306,7 +305,7 @@ export type UIDomProps<T = {}> = UIProps<T> & {
     style?: CSSProperties | string;
     data?: Dictionary;
 } & T;
-export type UIGenericProps<Type extends DomTags = DomTags, T = {}> = UIDomProps & HTMLSVGAttributes<Type, {}> & ListenerAttributes & T;
+export type UIGenericProps<Type extends UIDomTag = UIDomTag, T = {}> = UIDomProps & HTMLSVGAttributes<Type, {}> & ListenerAttributes & T;
 /** Post props don't contain key, ref. In addition className and class have been merged, and style processed to a dictionary. */
 export type UIGenericPostProps<Props = {}> = Props & { className?: string; style?: CSSProperties; data?: Dictionary; };
 
@@ -673,7 +672,7 @@ export interface UIContentEnvelope {
 export type UICloneNodeBehaviour = "deep" | "shallow" | "always";
 export type UIRenderTextTagCallback = (text: string | number) => Node | null;
 export type UIRenderTextContentCallback = (text: string | number) => string | number;
-export type UIRenderTextTag = keyof HTMLElementTagNameMap | "" | UIRenderTextTagCallback;
+export type UIRenderTextTag = UIDomTag | "" | UIRenderTextTagCallback;
 export interface UIHostSettingsUpdate extends Partial<Omit<UIHostSettings, "updateLiveModes">> {
     updateLiveModes?: Partial<UIHostSettings["updateLiveModes"]>;
 }
@@ -753,7 +752,7 @@ export interface UIHostSettings {
 
     /** Tag to use for as a fallback when using the uiDom.htmlDef feature (that uses .innerHTML on a dummy element). Defaults to "span".
      * - It only has meaning, if the output contains multiple elements and didn't specifically define the container tag to use. */
-    renderHtmlDefTag: keyof HTMLElementTagNameMap;
+    renderHtmlDefTag: UIDomTag;
 
     /** If you want to process the simple content text, assign a callback here. */
     renderTextContent: UIRenderTextContentCallback | null;
