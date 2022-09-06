@@ -11,7 +11,7 @@ import { UIMini } from "../classes/UIMini";
 import { UIHost } from "../classes/UIHost";
 import { UILive } from "../classes/UILive";
 import { UIContext, UIContexts, UIContextsProps } from "../classes/UIContext";
-import { UIElement, UIFragment, UIPortal, UIElementProps, UIPortalProps } from "../classes/UIPseudoClasses";
+import { UIElement, UIFragment, UIFragmentProps, UIPortal, UIElementProps, UIPortalProps } from "../classes/UIPseudoClasses";
 import { UIWiredType } from "../classes/UIWired";
 
 
@@ -184,11 +184,11 @@ export type UIPreClassName<Valid extends string = string, Single extends string 
 
 // - Component & Boundary - //
 
-export type UIMiniFunction<Props = {}> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
-export type UILiveFunction<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
-export type UILiveComponent<Props = {}, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
-export type UISpreadFunction<Props = {}> = (props: Props, childDefs: UIDefTarget[]) => UIRenderOutput;
-export type UIFunction<Props = {}> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
+export type UIMiniFunction<Props = any> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
+export type UILiveFunction<Props = any, State = any, Remote = any, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
+export type UILiveComponent<Props = any, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
+export type UISpreadFunction<Props = any> = (props: Props, childDefs: UIDefTarget[]) => UIRenderOutput;
+export type UIFunction<Props = any> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
 
 export type UIBoundableFunction<Props = {}> = UILiveFunction<Props> | UIMiniFunction<Props>;
 /** This is a shortcut for UIDom renderers that will be have their own boundary:
@@ -206,7 +206,7 @@ export type UISourceBoundaryId = string;
 
 // - Tags - //
 
-export type UIPseudoTag<Props = {}> = typeof UIFragment<Props> | ([Props] extends [UIContextsProps] ? typeof UIContexts<{}, Props> : never) | ([Props] extends [UIElementProps] ? typeof UIElement<HTMLTags | SVGTags, Props> : never) | ([Props] extends [UIPortalProps] ? typeof UIPortal<Props> : never);
+export type UIPseudoTag<Props = {}> = ([Props] extends [UIFragmentProps] ? typeof UIFragment<Props> : never) | ([Props] extends [UIContextsProps] ? typeof UIContexts<{}, Props> : never) | ([Props] extends [UIElementProps] ? typeof UIElement<HTMLTags | SVGTags, Props> : never) | ([Props] extends [UIPortalProps] ? typeof UIPortal<Props> : never);
 // export type UIComponentTag<Props = {}> = UIComponent<Props>;
 export type UIComponentTag<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | typeof UISpread<Props> | UIWiredType<Props> | UIPseudoTag<Props> | UIFunction<Props>;
 export type UIPreTag = UIDomTag | UIPseudoTag | UIComponentTag;
@@ -217,7 +217,7 @@ export type UIDefKeyTag = UIPostTag | UIDefTarget | typeof UIFragment | UIHost;
 
 // - Contextual - //
 
-export type UIContextData = Dictionary | null; // We we must extend something - and not any.
+// export type UIContextData = Dictionary | null; // We we must extend something - and not any.
 export type UIAction = { type?: string; payload?: any; };
 export type UIQuestion<Value = any> = UIAction & { value: Value; };
 export type UIQuestionary<Value = any> = UIAction & { value?: Value; values: Value[] };
@@ -322,13 +322,13 @@ export type UIRenderOutput = UIRenderOutputSingle | UIRenderOutputMulti;
 
 // - Update related - //
 
-export interface UILiveUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}, Context extends Dictionary = {}> {
+export interface UILiveUpdates<Props = {}, State = {}, Context = {}> {
     props?: Props;
     state?: State;
     remote?: Context;
     children?: UIDefTarget[];
 }
-export interface UILiveNewUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}> {
+export interface UILiveNewUpdates<Props = {}, State = {}> {
     props?: Props;
     state?: State;
     children?: UIDefTarget[];

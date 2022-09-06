@@ -3,21 +3,20 @@
 // - Imports - //
 
 import {
-    Dictionary,
     UIDefTarget,
     UIDomProps,
     UISpreadFunction,
 } from "../static/_Types";
 import { _Defs } from "../static/_Defs";
 
-export type UISpreadProps<Props extends Dictionary = {}> = UIDomProps<Props>;
-export class UISpread<Props extends Dictionary = {}> {
+export type UISpreadProps<Props = {}> = UIDomProps<Props>;
+export class UISpread<Props = any> {
     public static UI_DOM_TYPE = "Spread";
     constructor(_props?: Props | null) { }
     /** The renderer function to spread out the contents. */
     static render: UISpreadFunction;
     /** The function to unfold the contents. Will be overridden by createSpread procedure. */
-    static unfold(_props: Dictionary, _childDefs: UIDefTarget[]): UIDefTarget | null { return null; }
+    static unfold(_props: any, _childDefs: UIDefTarget[]): UIDefTarget | null { return null; }
     /** The universal method to unfold the spread. (The others are static too but based on an extending class.)
      * - The contents are the cleaned childDefs that should replace any content pass.
      * - Wrapped in a fragment that provides scoping detection. */
@@ -75,7 +74,7 @@ export class UISpread<Props extends Dictionary = {}> {
 }
 /** UISpread is a totally static functionality. */
 export interface UISpread {}
-export const createSpread = <Props extends Dictionary = {}>(func: UISpreadFunction<Props>) => class _UISpread extends UISpread<Props> {
+export const createSpread = <Props = {}>(func: UISpreadFunction<Props>) => class _UISpread extends UISpread<Props> {
     static render = func;
     /** The unfold method unique to this particular UISpread extended class. */
     static unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null {

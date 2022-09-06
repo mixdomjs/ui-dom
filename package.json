@@ -1,6 +1,6 @@
 {
     "name": "ui-dom",
-    "version": "2.4.0",
+    "version": "2.4.1",
     "description": "Powerful state based DOM rendering library (in JS/TS) - inspired by React, but totally reconceptualized.",
     "keywords": [
         "ui-dom",
@@ -20,8 +20,8 @@
     "license": "MIT",
     "private": false,
     "repository": {
-      "type": "git",
-      "url": "git+https://github.com/ui-dom/ui-dom.git"
+        "type": "git",
+        "url": "git+https://github.com/ui-dom/ui-dom.git"
     },
     "module": "./dist/ui-dom.module.js",
     "main": "./dist/ui-dom.js",
@@ -48,7 +48,7 @@
         "rollup-plugin-delete": "^2.0.0",
         "rollup-plugin-dts": "^4.2.2",
         "rollup-plugin-terser": "^7.0.2",
-        "typescript": "^4.7.4"
+        "typescript": "^4.8.2"
     },
     "dependencies": {}
 }

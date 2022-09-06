@@ -14,7 +14,6 @@ import {
     UIActions,
     UIQuestion,
     UIQuestionary,
-    UIContextData,
     ClassBaseMixer,
     UIAllContextsWithNull,
 } from "../static/_Types";
@@ -260,7 +259,7 @@ function _UIContextMixin(Base: ClassType) {
 
     }
 }
-export interface UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> {
+export interface UIContext<Data = any, Actions extends UIActions = {}> {
 
     // - For TypeScript - //
 
@@ -400,11 +399,11 @@ export interface UIContext<Data extends UIContextData = any, Actions extends UIA
     onActionInterests?(boundary: UILiveBoundary, ctxName: string, isInterested: boolean): void;
 
 }
-export class UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> extends _UIContextMixin(Object) {
+export class UIContext<Data = any, Actions extends UIActions = {}> extends _UIContextMixin(Object) {
     // There's no passing arguments if doesn't use as a mixin.
     constructor(data?: Data, settings?: UIContextSettingsUpdate) { super(data, settings); }
 }
-export type UIContextType<Data extends UIContextData = any, Actions extends UIActions = {}> = ClassType<UIContext<Data, Actions>, [Data?, UIContextSettingsUpdate?]> & {
+export type UIContextType<Data = any, Actions extends UIActions = {}> = ClassType<UIContext<Data, Actions>, [Data?, UIContextSettingsUpdate?]> & {
     readonly UI_DOM_TYPE: "Context";
 }
 
@@ -437,7 +436,7 @@ export type UIContextsType<AllContexts extends UIAllContextsWithNull = {}> = Cla
     readonly UI_DOM_TYPE: "Contexts";
 }
 /** Create multiple named contexts. (Useful for tunneling.) */
-export const createContexts = <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name]> }, AllData extends { [Name in keyof Contexts]: Contexts[Name]["data"] } = { [Name in keyof Contexts]: Contexts[Name]["data"] }>(contextsData: AllData, settings?: UIContextSettingsUpdate): Contexts => {
+export const createContexts = <Contexts extends { [Name in keyof AllData & string]: UIContext<AllData[Name]> }, AllData extends { [Name in keyof Contexts & string]: Contexts[Name]["data"] } = { [Name in keyof Contexts & string]: Contexts[Name]["data"] }>(contextsData: AllData, settings?: UIContextSettingsUpdate): Contexts => {
     const contexts: Record<string, UIContext> = {};
     for (const name in contextsData)
         contexts[name] = createContext(contextsData[name], settings);

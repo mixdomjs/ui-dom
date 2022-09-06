@@ -23,7 +23,7 @@ import {
     UIRenderOutput,
     UIUpdateCompareModesBy,
     UIContextAttach,
-    UIContextData,
+    UILiveNewUpdates,
 } from "../static/_Types";
 import { _Lib } from "../static/_Lib";
 import { _Find } from "../static/_Find";
@@ -35,7 +35,7 @@ import { UIContext } from "./UIContext";
 
 // - UILive base mixin - //
 
-function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}>(Base: ClassType) {
+function _UILiveMixin<Props = any, State = any, Remote = any, AllContexts extends UIAllContexts = {}>(Base: ClassType) {
 
     return class _UILive extends Base {
 
@@ -98,14 +98,14 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
             // Combine state.
             const state = { ...this.state, ...newState } as State;
             // Update.
-            this.uiBoundary.updateBy({ state }, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
+            this.uiBoundary.updateBy({ state } as UILiveNewUpdates, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
         }
 
         public setInState(property: keyof State, value: any, forceUpdate?: boolean | "all", forceUpdateTimeout?: number | null, forceRenderTimeout?: number | null): void {
             // Get new state.
             const state = { ...(this.state || {}), [property]: value } as State;
             // Update.
-            this.uiBoundary.updateBy({ state }, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
+            this.uiBoundary.updateBy({ state } as UILiveNewUpdates, forceUpdate, forceUpdateTimeout, forceRenderTimeout);
         }
 
 
@@ -354,7 +354,7 @@ function _UILiveMixin<Props extends Dictionary = {}, State extends Dictionary = 
 }
 
 // Using an interface with the same name as the class solves the <T> problem with mixins.
-export interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
+export interface UILive<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
 
 
     // - Members - //
@@ -532,11 +532,11 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
     /** This creates a new context - presumably to be attached with .contexts prop.
      * - If overrideWithName given, then includes this component in the context as well (as if its parent had used .contexts).
      *   .. Note that this is the same as using .overrideContext(name), so it will override any context of the same name for this component. */
-    createContext<CtxData extends UIContextData = any, CtxActions extends UIActions = UIActions>(data: CtxData, overrideWithName?: never | "" | undefined, refreshIfOverriden?: never | false): UIContext<CtxData, CtxActions>;
+    createContext<CtxData = any, CtxActions extends UIActions = UIActions>(data: CtxData, overrideWithName?: never | "" | undefined, refreshIfOverriden?: never | false): UIContext<CtxData, CtxActions>;
     createContext<Name extends keyof AllContexts & string>(data: AllContexts[Name]["data"], overrideWithName: Name, refreshIfOverriden?: boolean): AllContexts[Name];
     /** Same as createContext but for multiple contexts all at once.
      * - If overrideForSelf set to true, will call overrideContexts after to include this component into each context. */
-    createContexts<Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name]> }, AllData extends { [Name in keyof Contexts]: Contexts[Name]["data"] } = { [Name in keyof Contexts]: Contexts[Name]["data"] }>(allData: AllData, overrideForSelf?: never | false | undefined, refreshIfOverriden?: never | false): Contexts;
+    createContexts<Contexts extends { [Name in keyof AllData & string]: UIContext<AllData[Name]> }, AllData extends { [Name in keyof Contexts & string]: Contexts[Name]["data"] } = { [Name in keyof Contexts & string]: Contexts[Name]["data"] }>(allData: AllData, overrideForSelf?: never | false | undefined, refreshIfOverriden?: never | false): Contexts;
     createContexts<Name extends keyof AllContexts & string>(allData: Partial<Record<Name, AllContexts[Name]["data"]>>, overrideForSelf: true, refreshIfOverriden?: boolean): Partial<Record<Name, AllContexts[Name]["data"]>>;
 
 
@@ -550,9 +550,9 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
      * - Note that when creates a wired renderer through this method (on a live component), it will automatically update whenever this component is checked for should-updates.
      * - Note that in the UILive context, you should always have builderOrProps or mixer. (Otherwise makes no sense to hook up to component's updates.) */
     createWired<
-        BaseProps extends Dictionary = {},
-        WiredProps extends Dictionary = {},
-        MixedProps extends Dictionary = BaseProps & WiredProps,
+        BaseProps = {},
+        WiredProps = {},
+        MixedProps = BaseProps & WiredProps,
         Params extends any[] = any[],
         Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps,
         Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps
@@ -598,7 +598,7 @@ export interface UILive<Props extends Dictionary = {}, State extends Dictionary 
 
 // - The class and create shortcut - //
 
-export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
+export class UILive<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> extends _UILiveMixin(Object) {
     // We need a constructor here for typescript TSX.
     constructor(props: Props, boundary?: UISourceBoundary, ...args: any[]) {
         super(props, boundary, ...args);
@@ -606,18 +606,18 @@ export class UILive<Props extends Dictionary = {}, State extends Dictionary = {}
 }
 
 // /** Shortcut class to go actions first. Useful for those components that rely mostly (or only) on actions and data. */
-// export class UILiveBy<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}>
+// export class UILiveBy<AllContexts extends UIAllContexts = {}, Remote = {}, Props = {}, State = {}>
 //     extends UILive<Props, State, Remote, AllContexts> {}
 
 /** Shortcut typing to go actions first. Useful for those components that rely mostly (or only) on actions and data. */
-export interface UILiveBy<AllContexts extends UIAllContexts = {}, Remote extends Dictionary = {}, Props extends Dictionary = {}, State extends Dictionary = {}>
+export interface UILiveBy<AllContexts extends UIAllContexts = {}, Remote = {}, Props = {}, State = {}>
     extends UILive<Props, State, Remote, AllContexts> {}
 
 /** Create a UILive functional component. */
 export const createLive = <
-    Props extends Dictionary = {},
-    State extends Dictionary = {},
-    Remote extends Dictionary = {},
+    Props = {},
+    State = {},
+    Remote = {},
     AllContexts extends UIAllContexts = {}
 >( func: (q: UILive<Props, State, Remote, AllContexts>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) =>
     ((props, ui) => func(ui, props)) as UILiveFunction<Props, State, Remote, AllContexts>;
@@ -626,9 +626,9 @@ export const createLive = <
  * - This is only for TypeScript purposes to give the contexts first (for actions), then remote data from contexts, and then props and state. */
 export const createLiveBy = <
     AllContexts extends UIAllContexts = {},
-    Remote extends Dictionary = {},
-    Props extends Dictionary = {},
-    State extends Dictionary = {}
+    Remote = {},
+    Props = {},
+    State = {}
 >( func: (q: UILive<Props, State, Remote, AllContexts>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) =>
     ((props, ui) => func(ui, props)) as UILiveFunction<Props, State, Remote, AllContexts>;
 

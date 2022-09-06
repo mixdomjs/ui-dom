@@ -1,3 +1,10 @@
+## v2.4.1
+
+### TypeScript v4.8 support
+
+- Update to support TypeScript version 4.8 with its refinements regarding type checks.
+- In relation to above removed `UIContextData` type.
+
 ## v2.4.0
 
 ### Features

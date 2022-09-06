@@ -5,7 +5,6 @@
 import { _Find } from "../static/_Find";
 import { _Lib } from "../static/_Lib";
 import {
-    Dictionary,
     ClassType,
     ClassBaseMixer,
     UIDefTarget,
@@ -20,7 +19,7 @@ import {
 import { uiDom } from "../uiDom";
 import { UIMiniBoundary, UISourceBoundary } from "./UIBoundary";
 
-function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
+function _UIMiniMixin<Props = any>(Base: ClassType) {
 
     return class _UIMini extends Base {
 
@@ -94,7 +93,7 @@ function _UIMiniMixin<Props extends Dictionary = {}>(Base: ClassType) {
 
     }
 }
-export interface UIMini<Props extends Dictionary = {}> {
+export interface UIMini<Props = {}> {
 
     // - Members - //
 
@@ -174,12 +173,12 @@ export interface UIMini<Props extends Dictionary = {}> {
 
 }
 
-export class UIMini<Props extends Dictionary = {}> extends _UIMiniMixin(Object) {
+export class UIMini<Props = {}> extends _UIMiniMixin(Object) {
     // Needed for TSX.
     constructor(props: Props, boundary?: UISourceBoundary) { super(props, boundary); }
 }
 
-export const createMini = <Props extends Dictionary = {}>( func: (mini: UIMini<Props>, props: Props) => ReturnType<UIMiniFunction<Props>>): UIMiniFunction<Props> =>
+export const createMini = <Props = {}>( func: (mini: UIMini<Props>, props: Props) => ReturnType<UIMiniFunction<Props>>): UIMiniFunction<Props> =>
     function(props) { return func(this, props); };
 
 /** There are two ways you can use this:

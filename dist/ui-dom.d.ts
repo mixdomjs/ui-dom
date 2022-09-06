@@ -422,9 +422,9 @@ interface SVGNativeAttributes {
 }
 
 declare const UIMini_base: {
-    new (props: {}, boundary?: UISourceBoundary | undefined, ...passArgs: any[]): {
+    new (props: any, boundary?: UISourceBoundary | undefined, ...passArgs: any[]): {
         readonly uiBoundary: UIMiniBoundary<{}>;
-        readonly props: {};
+        readonly props: any;
         updateMode: UIUpdateCompareMode | null;
         setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
         getChildren(skipNeeds?: boolean, shallowCopy?: boolean): readonly UIDefTarget[];
@@ -435,21 +435,18 @@ declare const UIMini_base: {
         findDomNodes(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): Node[];
         findComponents<Component extends UIComponent<{}> = UIComponent<{}>>(maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): Component[];
         findTreeNodes(types?: RecordableType<UITreeNodeType> | undefined, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean, validator?: ((treeNode: UITreeNode) => any) | undefined): UITreeNode[];
-        render(_props: {}): UIMiniFunction<{}> | UIRenderOutput;
+        render(_props: any): UIRenderOutput | UIMiniFunction<any>;
         constructor: Function;
         toString(): string;
         toLocaleString(): string;
         valueOf(): Object;
-        /** Set the update mode for this particular renderer instance.
-         * - If null uses settings.updateMiniMode from uiHost.
-         * - Note that you can also assign the .uiShouldUpdate method to affect this. */
         hasOwnProperty(v: PropertyKey): boolean;
         isPrototypeOf(v: Object): boolean;
         propertyIsEnumerable(v: PropertyKey): boolean;
     };
     UI_DOM_TYPE: string;
 };
-interface UIMini<Props extends Dictionary = {}> {
+interface UIMini<Props = {}> {
     /** Ref to the dedicated boundary. */
     uiBoundary: UIMiniBoundary;
     /** Fresh props. */
@@ -500,10 +497,10 @@ interface UIMini<Props extends Dictionary = {}> {
     uiDidUpdate?(prevProps: Props | null, newProps: Props | null): void;
     uiWillUnmount?(): void;
 }
-declare class UIMini<Props extends Dictionary = {}> extends UIMini_base {
+declare class UIMini<Props = {}> extends UIMini_base {
     constructor(props: Props, boundary?: UISourceBoundary);
 }
-declare const createMini: <Props extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>) => UIMiniFunction<Props>;
+declare const createMini: <Props = {}>(func: (mini: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>) => UIMiniFunction<Props>;
 /** There are two ways you can use this:
  * 1. Call this to give basic UIMini features with types for Props and such being empty.
  *      * For example: `class MyMix extends UIMiniMixin(MyBase) {}`
@@ -766,7 +763,7 @@ declare const UIContext_base: {
     };
     UI_DOM_TYPE: string;
 };
-interface UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> {
+interface UIContext<Data = any, Actions extends UIActions = {}> {
     Actions: Actions;
     /** Contains the TreeNodes where this context is inserted as keys and values is the name is inserted as.
      * - This is not used for refresh flow (anymore), but might be useful for custom purposes. */
@@ -877,10 +874,10 @@ interface UIContext<Data extends UIContextData = any, Actions extends UIActions 
     onDataInterests?(boundary: UILiveBoundary, ctxName: string, isInterested: boolean): void;
     onActionInterests?(boundary: UILiveBoundary, ctxName: string, isInterested: boolean): void;
 }
-declare class UIContext<Data extends UIContextData = any, Actions extends UIActions = {}> extends UIContext_base {
+declare class UIContext<Data = any, Actions extends UIActions = {}> extends UIContext_base {
     constructor(data?: Data, settings?: UIContextSettingsUpdate);
 }
-declare type UIContextType<Data extends UIContextData = any, Actions extends UIActions = {}> = ClassType<UIContext<Data, Actions>, [Data?, UIContextSettingsUpdate?]> & {
+declare type UIContextType<Data = any, Actions extends UIActions = {}> = ClassType<UIContext<Data, Actions>, [Data?, UIContextSettingsUpdate?]> & {
     readonly UI_DOM_TYPE: "Context";
 };
 /** Create a new context. */
@@ -906,21 +903,21 @@ declare type UIContextsType<AllContexts extends UIAllContextsWithNull = {}> = Cl
     readonly UI_DOM_TYPE: "Contexts";
 };
 /** Create multiple named contexts. (Useful for tunneling.) */
-declare const createContexts: <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts]: Contexts[Name_2]["data"]; }>(contextsData: AllData, settings?: UIContextSettingsUpdate) => Contexts;
+declare const createContexts: <Contexts extends { [Name in keyof AllData & string]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts & string]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts & string]: Contexts[Name_2]["data"]; }>(contextsData: AllData, settings?: UIContextSettingsUpdate) => Contexts;
 
 declare const UILive_base: {
-    new (props: {}, boundary?: UISourceBoundary | undefined, ...args: any[]): {
-        readonly props: {};
-        state: {};
-        remote: {};
+    new (props: any, boundary?: UISourceBoundary | undefined, ...args: any[]): {
+        readonly props: any;
+        state: any;
+        remote: any;
         readonly uiWired: Set<UIWiredType<{}, {}, {}, any[], (lastProps: {} | null, ...params: any[]) => {}, (baseProps: {}, addedProps: {}, ...params: any[]) => {}>> | null;
         readonly uiBoundary: UILiveBoundary<{}, {}, {}, {}>;
         updateModes: Partial<UIUpdateCompareModesBy>;
         timers?: Map<any, number> | undefined;
         setUpdateModes(modes: Partial<UIUpdateCompareModesBy>, extend?: boolean): void;
         update(forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
-        setState(newState: {} | Pick<{}, never>, forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
-        setInState(property: never, value: any, forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
+        setState(newState: any, forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
+        setInState(property: string | number | symbol, value: any, forceUpdate?: boolean | "all" | undefined, forceUpdateTimeout?: number | null | undefined, forceRenderTimeout?: number | null | undefined): void;
         addTimer(timerId: any, callback: () => void, timeout: number): void;
         hasTimer(timerId: any): boolean;
         clearTimer(timerId: any): void;
@@ -942,10 +939,10 @@ declare const UILive_base: {
          * - If boolean given it forces the mode.
          * - If null | undefined or "temp", then clears on each render start, and sets to "temp" on using .getChildren(). */
         needsChildren(needs?: boolean | "temp" | null | undefined): void;
-        needsData(contextName: {} & string, needs?: any, refresh?: boolean | undefined): boolean;
+        needsData(contextName: string, needs?: any, refresh?: boolean | undefined): boolean;
         needsDataBy(namedNeeds: Record<never, string | boolean | string[]>, extend?: boolean | undefined, refresh?: boolean | undefined): boolean;
-        needsAction(contextName: {} & string, actionType: string, needs?: boolean | undefined): void;
-        needsActions(contextName: {} & string, actionTypes?: boolean | string[], extend?: boolean | undefined): void;
+        needsAction(contextName: string, actionType: string, needs?: boolean | undefined): void;
+        needsActions(contextName: string, actionTypes?: boolean | string[], extend?: boolean | undefined): void;
         needsActionsBy(namedNeeds: Record<never, boolean | string[]>, extendWithinContext?: boolean | undefined, extendForAll?: boolean | undefined): void;
         setData(contextName: never, data: any, extend?: boolean | undefined, refresh?: boolean | undefined, forceTimeout?: number | null | undefined): void;
         setInData(contextName: never, dataKey: string, data: any, extend?: boolean | undefined, refresh?: boolean | undefined, forceTimeout?: number | null | undefined): void;
@@ -974,7 +971,7 @@ declare const UILive_base: {
         createContext(data: any, overrideWithName?: string | undefined, refreshIfOverriden?: boolean): UIContext<any, {}>;
         createContexts(allData: any, overrideForSelf?: boolean, refreshIfOverriden?: boolean): Record<string, UIContext<any, {}>>;
         createWired(component: UIComponent<{}>, builder: (...params: any[]) => Dictionary<string, any>, mixer: (baseProps: Dictionary<string, any>, addsProps: Dictionary<string, any>, ...params: any[]) => Dictionary<string, any>, ...params: any[]): UIWiredType<{}, {}, {}, any[], (lastProps: {} | null, ...params: any[]) => {}, (baseProps: {}, addedProps: {}, ...params: any[]) => {}>;
-        render(): UILiveFunction<{}, {}, {}, {}> | UIRenderOutput;
+        render(): UIRenderOutput | UILiveFunction<any, any, any, {}>;
         constructor: Function;
         toString(): string;
         toLocaleString(): string;
@@ -985,7 +982,7 @@ declare const UILive_base: {
     };
     UI_DOM_TYPE: string;
 };
-interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
+interface UILive<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}, Actions extends AllContexts[keyof AllContexts]["Actions"] = AllContexts[keyof AllContexts]["Actions"]> {
     readonly props: Props;
     state: State;
     remote: Remote;
@@ -1150,16 +1147,16 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     /** This creates a new context - presumably to be attached with .contexts prop.
      * - If overrideWithName given, then includes this component in the context as well (as if its parent had used .contexts).
      *   .. Note that this is the same as using .overrideContext(name), so it will override any context of the same name for this component. */
-    createContext<CtxData extends UIContextData = any, CtxActions extends UIActions = UIActions>(data: CtxData, overrideWithName?: never | "" | undefined, refreshIfOverriden?: never | false): UIContext<CtxData, CtxActions>;
+    createContext<CtxData = any, CtxActions extends UIActions = UIActions>(data: CtxData, overrideWithName?: never | "" | undefined, refreshIfOverriden?: never | false): UIContext<CtxData, CtxActions>;
     createContext<Name extends keyof AllContexts & string>(data: AllContexts[Name]["data"], overrideWithName: Name, refreshIfOverriden?: boolean): AllContexts[Name];
     /** Same as createContext but for multiple contexts all at once.
      * - If overrideForSelf set to true, will call overrideContexts after to include this component into each context. */
     createContexts<Contexts extends {
-        [Name in keyof AllData]: UIContext<AllData[Name]>;
+        [Name in keyof AllData & string]: UIContext<AllData[Name]>;
     }, AllData extends {
-        [Name in keyof Contexts]: Contexts[Name]["data"];
+        [Name in keyof Contexts & string]: Contexts[Name]["data"];
     } = {
-        [Name in keyof Contexts]: Contexts[Name]["data"];
+        [Name in keyof Contexts & string]: Contexts[Name]["data"];
     }>(allData: AllData, overrideForSelf?: never | false | undefined, refreshIfOverriden?: never | false): Contexts;
     createContexts<Name extends keyof AllContexts & string>(allData: Partial<Record<Name, AllContexts[Name]["data"]>>, overrideForSelf: true, refreshIfOverriden?: boolean): Partial<Record<Name, AllContexts[Name]["data"]>>;
     /** Creates a wired renderer.
@@ -1169,7 +1166,7 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
      *     3. The props of the actual class instances are mixed with the wiredProps defined by this class.
      * - Note that when creates a wired renderer through this method (on a live component), it will automatically update whenever this component is checked for should-updates.
      * - Note that in the UILive context, you should always have builderOrProps or mixer. (Otherwise makes no sense to hook up to component's updates.) */
-    createWired<BaseProps extends Dictionary = {}, WiredProps extends Dictionary = {}, MixedProps extends Dictionary = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps: Builder | WiredProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
+    createWired<BaseProps = {}, WiredProps = {}, MixedProps = BaseProps & WiredProps, Params extends any[] = any[], Builder extends (lastProps: WiredProps | null, ...params: Params) => WiredProps = (lastProps: WiredProps | null, ...params: Params) => WiredProps, Mixer extends (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps = (baseProps: BaseProps, addsProps: WiredProps, ...params: Params) => MixedProps>(component: UIComponent<MixedProps>, builderOrProps: Builder | WiredProps | null, mixer?: Mixer, ...params: Params): UIWiredType<BaseProps, WiredProps, MixedProps, Params, Builder, Mixer>;
     /** The most important function of a UILive: the render output function. */
     render(props: Props, ui: ThisType<this>): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
     render(): UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
@@ -1198,11 +1195,11 @@ interface UILive<Props extends Dictionary = {}, State extends Dictionary = {}, R
     uiDidUpdate?(preUpdates: UILiveUpdates<Props, State, Remote>, newUpdates: UILiveUpdates<Props, State, Remote>): void;
     uiWillUnmount?(): void;
 }
-declare class UILive<Props extends Dictionary = {}, State extends Dictionary = {}, Remote extends Dictionary = {}, AllContexts extends UIAllContexts = {}> extends UILive_base {
+declare class UILive<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> extends UILive_base {
     constructor(props: Props, boundary?: UISourceBoundary, ...args: any[]);
 }
 /** Create a UILive functional component. */
-declare const createLive: <Props extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) => UILiveFunction<Props, State, Remote, AllContexts>;
+declare const createLive: <Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>) => UILiveFunction<Props, State, Remote, AllContexts>;
 /** There are two ways you can use this:
  * 1. Call this to give basic UILive features with types for Props and such being empty.
  *      * For example: `class MyMix extends UILiveMixin(MyBase) {}`
@@ -1405,10 +1402,10 @@ declare const UIRef_base: {
         treeNodes: Set<UITreeNode>;
         getTreeNode(): UITreeNode | null;
         getTreeNodes(): UITreeNode[];
-        getDomNode(onlyForDomRefs?: boolean): ((Node | UISourceBoundary) & Node) | null;
-        getDomNodes(onlyForDomRefs?: boolean): ((Node | UISourceBoundary) & Node)[];
-        getRefBoundary(): ((Node | UISourceBoundary) & UISourceBoundary) | null;
-        getRefBoundaries(): ((Node | UISourceBoundary) & UISourceBoundary)[];
+        getDomNode(onlyForDomRefs?: boolean): Node | (UISourceBoundary & Node) | null;
+        getDomNodes(onlyForDomRefs?: boolean): (Node | (UISourceBoundary & Node))[];
+        getRefBoundary(): UISourceBoundary | (Node & UISourceBoundary) | null;
+        getRefBoundaries(): (UISourceBoundary | (Node & UISourceBoundary))[];
         /** The collection (for clarity) of tree nodes where is attached to.
          * It's not needed internally but might be useful for custom needs. */
         constructor: Function;
@@ -1462,13 +1459,13 @@ declare const createRef: <Type extends Node | UISourceBoundary = Node | UISource
  */
 declare const UIRefMixin: ClassBaseMixer<UIRef<Node | UISourceBoundary>>;
 
-declare class UISpread<Props extends Dictionary = {}> {
+declare class UISpread<Props = any> {
     static UI_DOM_TYPE: string;
     constructor(_props?: Props | null);
     /** The renderer function to spread out the contents. */
     static render: UISpreadFunction;
     /** The function to unfold the contents. Will be overridden by createSpread procedure. */
-    static unfold(_props: Dictionary, _childDefs: UIDefTarget[]): UIDefTarget | null;
+    static unfold(_props: any, _childDefs: UIDefTarget[]): UIDefTarget | null;
     /** The universal method to unfold the spread. (The others are static too but based on an extending class.)
      * - The contents are the cleaned childDefs that should replace any content pass.
      * - Wrapped in a fragment that provides scoping detection. */
@@ -1477,7 +1474,7 @@ declare class UISpread<Props extends Dictionary = {}> {
 /** UISpread is a totally static functionality. */
 interface UISpread {
 }
-declare const createSpread: <Props extends Dictionary<string, any> = {}>(func: UISpreadFunction<Props>) => {
+declare const createSpread: <Props = {}>(func: UISpreadFunction<Props>) => {
     new (_props?: Props | null | undefined): {};
     render: UISpreadFunction<Props>;
     /** The unfold method unique to this particular UISpread extended class. */
@@ -1652,11 +1649,11 @@ interface ListenerAttributesAll {
  *     +  Note that maybe later TS might support it so that can use `uiDom.classNames<ValidName>(longName)` without the second type parameter like above.
  */
 declare type UIPreClassName<Valid extends string = string, Single extends string = Valid> = Single | Partial<Record<Valid, any>> | Array<Valid> | Set<Valid>;
-declare type UIMiniFunction<Props = {}> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
-declare type UILiveFunction<Props = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
-declare type UILiveComponent<Props = {}, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
-declare type UISpreadFunction<Props = {}> = (props: Props, childDefs: UIDefTarget[]) => UIRenderOutput;
-declare type UIFunction<Props = {}> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
+declare type UIMiniFunction<Props = any> = (this: UIMini<Props>, props: Props) => UIRenderOutput | UIMiniFunction<Props>;
+declare type UILiveFunction<Props = any, State = any, Remote = any, AllContexts extends UIAllContexts = {}> = (props: Props, ui: UILive<Props, State, Remote, AllContexts>) => UIRenderOutput | UILiveFunction<Props, State, Remote, AllContexts>;
+declare type UILiveComponent<Props = any, Component extends UILive = UILive> = (props: Props, ui: Component) => UIRenderOutput | UILiveComponent<Props, Component>;
+declare type UISpreadFunction<Props = any> = (props: Props, childDefs: UIDefTarget[]) => UIRenderOutput;
+declare type UIFunction<Props = any> = UISpreadFunction<Props> | UIMiniFunction<Props> | UILiveFunction<Props>;
 declare type UIBoundableFunction<Props = {}> = UILiveFunction<Props> | UIMiniFunction<Props>;
 /** This is a shortcut for UIDom renderers that will be have their own boundary:
  * - Either based on UILive class/mixin, or
@@ -1668,13 +1665,12 @@ declare type UIBoundable<Props = {}> = typeof UILive<Props> | typeof UIMini<Prop
 declare type UIComponent<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | UIWiredType<Props> | typeof UISpread<Props> | UIFunction<Props>;
 declare type UIBoundary = UISourceBoundary | UIContentBoundary;
 declare type UISourceBoundaryId = string;
-declare type UIPseudoTag<Props = {}> = typeof UIFragment<Props> | ([Props] extends [UIContextsProps] ? typeof UIContexts<{}, Props> : never) | ([Props] extends [UIElementProps] ? typeof UIElement<HTMLTags | SVGTags, Props> : never) | ([Props] extends [UIPortalProps] ? typeof UIPortal<Props> : never);
+declare type UIPseudoTag<Props = {}> = ([Props] extends [UIFragmentProps] ? typeof UIFragment<Props> : never) | ([Props] extends [UIContextsProps] ? typeof UIContexts<{}, Props> : never) | ([Props] extends [UIElementProps] ? typeof UIElement<HTMLTags | SVGTags, Props> : never) | ([Props] extends [UIPortalProps] ? typeof UIPortal<Props> : never);
 declare type UIComponentTag<Props = {}> = typeof UILive<Props> | typeof UIMini<Props> | typeof UISpread<Props> | UIWiredType<Props> | UIPseudoTag<Props> | UIFunction<Props>;
 declare type UIPreTag = UIDomTag | UIPseudoTag | UIComponentTag;
 declare type UIPostTag = "" | "_" | UIDomTag | UIComponentTag | null;
 /** This tag conversion is used for internal tag based def mapping. The UIDefTarget is the uiDom.ContentPass. */
 declare type UIDefKeyTag = UIPostTag | UIDefTarget | typeof UIFragment | UIHost;
-declare type UIContextData = Dictionary | null;
 declare type UIAction = {
     type?: string;
     payload?: any;
@@ -1777,13 +1773,13 @@ declare type UIRenderOutputSingle = UIDefTarget | UIContentSimple | UIContentNul
 interface UIRenderOutputMulti extends Array<UIRenderOutputSingle | UIRenderOutputMulti> {
 }
 declare type UIRenderOutput = UIRenderOutputSingle | UIRenderOutputMulti;
-interface UILiveUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}, Context extends Dictionary = {}> {
+interface UILiveUpdates<Props = {}, State = {}, Context = {}> {
     props?: Props;
     state?: State;
     remote?: Context;
     children?: UIDefTarget[];
 }
-interface UILiveNewUpdates<Props extends Dictionary = {}, State extends Dictionary | null = {}> {
+interface UILiveNewUpdates<Props = {}, State = {}> {
     props?: Props;
     state?: State;
     children?: UIDefTarget[];
@@ -2229,7 +2225,7 @@ declare type NameValidator<Valid extends string, Input> = [
  */
 declare type ValidateNames<Valid extends string> = <T1 extends NameValidator<Valid, T1>, T2 extends NameValidator<Valid, T2>, T3 extends NameValidator<Valid, T3>, T4 extends NameValidator<Valid, T4>, T5 extends NameValidator<Valid, T5>, T6 extends NameValidator<Valid, T6>, T7 extends NameValidator<Valid, T7>, T8 extends NameValidator<Valid, T8>, T9 extends NameValidator<Valid, T9>, T10 extends NameValidator<Valid, T10>, Tn extends NameValidator<Valid, Tn>>(t1?: T1, t2?: T2, t3?: T3, t4?: T4, t5?: T5, t6?: T6, t7?: T7, t8?: T8, t9?: T9, t10?: T10, ...tn: Tn[]) => string;
 
-declare class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps> {
+declare class UIWired<BaseProps = any> extends UIMini<BaseProps> {
     static UI_DOM_TYPE: string;
     static components: Set<UIMini>;
     static source: UIComponent;
@@ -2432,11 +2428,11 @@ declare const uiDom: {
     /** Create a new context. */
     createContext: <Data = any, Actions extends UIActions = UIActions>(data?: Data | undefined, settings?: UIContextSettingsUpdate<Actions["type"] & string> | undefined) => UIContext<Data, Actions>;
     /** Create multiple named contexts. (Useful for tunneling.) */
-    createContexts: <Contexts extends { [Name in keyof AllData]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts]: Contexts[Name_2]["data"]; }>(contextsData: AllData, settings?: UIContextSettingsUpdate<string> | undefined) => Contexts;
+    createContexts: <Contexts extends { [Name in keyof AllData & string]: UIContext<AllData[Name], {}>; }, AllData extends { [Name_1 in keyof Contexts & string]: Contexts[Name_1]["data"]; } = { [Name_2 in keyof Contexts & string]: Contexts[Name_2]["data"]; }>(contextsData: AllData, settings?: UIContextSettingsUpdate<string> | undefined) => Contexts;
     /** Create ref. */
     createRef: <Type extends Node | UISourceBoundary = Node | UISourceBoundary>() => UIRef<Type>;
     /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own pairing scope). */
-    createSpread: <Props extends Dictionary<string, any> = {}>(func: UISpreadFunction<Props>) => {
+    createSpread: <Props = {}>(func: UISpreadFunction<Props>) => {
         new (_props?: Props | null | undefined): {};
         render: UISpreadFunction<Props>;
         unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null;
@@ -2444,7 +2440,7 @@ declare const uiDom: {
         unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[]): UIDefTarget | null;
     };
     /** Create a SpreadFunction - the most performant way to render things (no lifecycle, just spread out with its own pairing scope). */
-    spread: <Props extends Dictionary<string, any> = {}>(func: UISpreadFunction<Props>) => {
+    spread: <Props = {}>(func: UISpreadFunction<Props>) => {
         new (_props?: Props | null | undefined): {};
         render: UISpreadFunction<Props>;
         unfold(props: Props, childDefs: UIDefTarget[]): UIDefTarget | null;
@@ -2452,17 +2448,17 @@ declare const uiDom: {
         unfoldWith(targetDef: UIDefTarget, contents: UIDefTarget[]): UIDefTarget | null;
     };
     /** Create a LiveFunction omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
-    createLive: <Props_1 extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Remote, AllContexts>) => UILiveFunction<Props_1, State, Remote, AllContexts>;
+    createLive: <Props_1 = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Remote, AllContexts>) => UILiveFunction<Props_1, State, Remote, AllContexts>;
     /** Create a LiveFunction omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
-    live: <Props_1 extends Dictionary<string, any> = {}, State extends Dictionary<string, any> = {}, Remote extends Dictionary<string, any> = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Remote, AllContexts>) => UILiveFunction<Props_1, State, Remote, AllContexts>;
+    live: <Props_1 = {}, State = {}, Remote = {}, AllContexts extends UIAllContexts = {}>(func: (q: UILive<Props_1, State, Remote, AllContexts, AllContexts[keyof AllContexts]["Actions"]>, props: Props_1) => UIRenderOutput | UILiveFunction<Props_1, State, Remote, AllContexts>) => UILiveFunction<Props_1, State, Remote, AllContexts>;
     /** Create a LiveFunction as <Contexts, Remote, Props, State> and omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
-    createLiveBy: <AllContexts_1 extends UIAllContexts = {}, Remote_1 extends Dictionary<string, any> = {}, Props_2 extends Dictionary<string, any> = {}, State_1 extends Dictionary<string, any> = {}>(func: (q: UILive<Props_2, State_1, Remote_1, AllContexts_1, AllContexts_1[keyof AllContexts_1]["Actions"]>, props: Props_2) => UIRenderOutput | UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>) => UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>;
+    createLiveBy: <AllContexts_1 extends UIAllContexts = {}, Remote_1 = {}, Props_2 = {}, State_1 = {}>(func: (q: UILive<Props_2, State_1, Remote_1, AllContexts_1, AllContexts_1[keyof AllContexts_1]["Actions"]>, props: Props_2) => UIRenderOutput | UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>) => UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>;
     /** Create a LiveFunction as <Contexts, Remote, Props, State> and omitting the first initProps argument. (It's actually swapped to an optional 2nd argument.) */
-    liveBy: <AllContexts_1 extends UIAllContexts = {}, Remote_1 extends Dictionary<string, any> = {}, Props_2 extends Dictionary<string, any> = {}, State_1 extends Dictionary<string, any> = {}>(func: (q: UILive<Props_2, State_1, Remote_1, AllContexts_1, AllContexts_1[keyof AllContexts_1]["Actions"]>, props: Props_2) => UIRenderOutput | UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>) => UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>;
+    liveBy: <AllContexts_1 extends UIAllContexts = {}, Remote_1 = {}, Props_2 = {}, State_1 = {}>(func: (q: UILive<Props_2, State_1, Remote_1, AllContexts_1, AllContexts_1[keyof AllContexts_1]["Actions"]>, props: Props_2) => UIRenderOutput | UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>) => UILiveFunction<Props_2, State_1, Remote_1, AllContexts_1>;
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */
-    createMini: <Props_3 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
+    createMini: <Props_3 = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
     /** Create a MiniFunction. Like uiDom.createLive you get the api as the first parameter, and props as second. */
-    mini: <Props_3 extends Dictionary<string, any> = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
+    mini: <Props_3 = {}>(func: (mini: UIMini<Props_3>, props: Props_3) => UIRenderOutput | UIMiniFunction<Props_3>) => UIMiniFunction<Props_3>;
     /** Creates a wired component.
      * - Technically creates a custom class that extends UIMini.
      *     1. This custom class serves as the common portion for all class instances that will be wrapped in their own boundaries when grounded.
@@ -2543,4 +2539,4 @@ declare namespace JSX {
     }
 }
 
-export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, CreateDataPicker, CreateDataSelector, DataExtractor, Dictionary, DomElement, HTMLAttributes, HTMLElementType, HTMLSVGAttributes, HTMLSVGAttributesBy, HTMLTags, JSX, ListenerAttributeNames, ListenerAttributes, ListenerAttributesAll, NameValidator, NonDictionary, NullLike, PropType, RecordableType, SVGAriaAttributes, SVGAttributes, SVGAttributesBy, SVGCoreAttributes, SVGElementType, SVGGeneralAttributes, SVGGlobalAttributes, SVGGraphicalEventAttributes, SVGNativeAttributes, SVGPresentationalAttributes, SVGStylingAttributes, SVGTags, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBuildRemoteParams, UIChangeInfos, UICloneNodeBehaviour, UICompareDepthByMode, UIComponent, UIComponentProps, UIComponentTag, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextData, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomElementProps, UIDomProps, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveBoundary, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniBoundary, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIPseudoTag, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UIRenderTextContentCallback, UIRenderTextTag, UIRenderTextTagCallback, UISourceBoundary, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createDataPicker, createDataSelector, createDef, createEffect, createHost, createLive, createMini, createRef, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };
+export { CSSProperties, ClassBaseMixer, ClassMixer, ClassType, CreateDataPicker, CreateDataSelector, DataExtractor, Dictionary, DomElement, HTMLAttributes, HTMLElementType, HTMLSVGAttributes, HTMLSVGAttributesBy, HTMLTags, JSX, ListenerAttributeNames, ListenerAttributes, ListenerAttributesAll, NameValidator, NonDictionary, NullLike, PropType, RecordableType, SVGAriaAttributes, SVGAttributes, SVGAttributesBy, SVGCoreAttributes, SVGElementType, SVGGeneralAttributes, SVGGlobalAttributes, SVGGraphicalEventAttributes, SVGNativeAttributes, SVGPresentationalAttributes, SVGStylingAttributes, SVGTags, Split, UIAction, UIActions, UIAllContexts, UIAllContextsActions, UIAllContextsData, UIAllContextsDataWithNull, UIAllContextsWithNull, UIBoundable, UIBoundableFunction, UIBoundary, UIBuildRemoteParams, UIChangeInfos, UICloneNodeBehaviour, UICompareDepthByMode, UIComponent, UIComponentProps, UIComponentTag, UIContentEnvelope, UIContentNull, UIContentSimple, UIContentValue, UIContext, UIContextAttach, UIContextMixin, UIContextRefresh, UIContextType, UIContexts, UIContextsType, UIDefApplied, UIDefAppliedBase, UIDefAppliedPseudo, UIDefBoundary, UIDefContent, UIDefContentInner, UIDefContexts, UIDefDom, UIDefElement, UIDefFragment, UIDefHost, UIDefKeyTag, UIDefPass, UIDefPortal, UIDefTarget, UIDefTargetBase, UIDefTargetPseudo, UIDefType, UIDefTypesAll, uiDom as UIDom, UIDomElementProps, UIDomProps, UIDomRenderInfo, UIDomTag, UIEffect, UIEffectMixin, UIElement, UIFragment, UIFunction, UIGenericPostProps, UIGenericProps, UIHTMLDiffs, UIHost, UIHostMixin, UIHostSettings, UIHostSettingsUpdate, UILive, UILiveBoundary, UILiveComponent, UILiveFunction, UILiveMixin, UILiveNewUpdates, UILiveUpdates, UIMini, UIMiniBoundary, UIMiniFunction, UIMiniMixin, UIPortal, UIPostTag, UIPreClassName, UIPreTag, UIProps, UIPseudoTag, UIQuestion, UIQuestionary, UIRef, UIRefMixin, UIRenderOutput, UIRenderOutputMulti, UIRenderOutputSingle, UIRenderTextContentCallback, UIRenderTextTag, UIRenderTextTagCallback, UISourceBoundary, UISourceBoundaryChange, UISourceBoundaryChangeType, UISourceBoundaryId, UISpread, UISpreadFunction, UITreeNode, UITreeNodeBoundary, UITreeNodeContexts, UITreeNodeDom, UITreeNodeEmpty, UITreeNodeHost, UITreeNodePass, UITreeNodePortal, UITreeNodeRoot, UITreeNodeType, UIUpdateCompareMode, UIUpdateCompareModesBy, UIUponAction, UIUponData, UIUponPreAction, UIUponQuestion, UIWired, UIWiredType, ValidateNames, createContext, createContexts, createDataPicker, createDataSelector, createDef, createEffect, createHost, createLive, createMini, createRef, createSpread, createWired, uiContent, uiContentCopy, uiDef, uiDom, uiWithContent };

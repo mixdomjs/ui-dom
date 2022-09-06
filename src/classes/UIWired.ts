@@ -17,7 +17,7 @@ import { uiContent } from "../uiDom";
 // - UIWired - //
 
 // Note that we don't make UIWired a mixin due to its extensive / special usage of static class features.
-export class UIWired<BaseProps extends Dictionary = {}> extends UIMini<BaseProps> {
+export class UIWired<BaseProps = any> extends UIMini<BaseProps> {
 
     // - Truly static - //
 

@@ -649,9 +649,9 @@ export class UIRender {
         for (const prop of domNode.getAttributeNames())
             domProps[prop] = domNode.getAttribute(prop);
         // Style.
-        const cssText = domNode.style.cssText;
+        const cssText = (domNode as HTMLElement | SVGElement).style.cssText;
         if (cssText)
-            domProps.style = _Lib.cleanHtmlStyle(domNode.style.cssText);
+            domProps.style = _Lib.cleanHtmlStyle(cssText);
         // Return found.
         return domProps;
     }
