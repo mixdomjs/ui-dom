@@ -208,13 +208,12 @@ function _UIContextMixin(Base: ClassType) {
             // Prepare.
             const dataKeys = dataKey.split(".");
             const lastKey = dataKeys.pop();
-            if (!lastKey || !this.data)
+            if (!lastKey)
                 return;
             // Get data parent.
-            let data = this.data as Record<string, any>;
-            for (const key of dataKeys) {
-                data = dataKeys[key];
-            }
+            let data = (this.data || (this.data = {})) as Record<string, any>;
+            for (const key of dataKeys)
+                data = data[key] || (data[key] = {});
             // Extend.
             if (extend) {
                 const last = data[lastKey];
@@ -242,8 +241,11 @@ function _UIContextMixin(Base: ClassType) {
             // Get nested.
             const dataKeys = dataKey.split(".");
             let data = this.data as Record<string, any>;
-            for (const key of dataKeys)
+            for (const key of dataKeys) {
+                if (!data)
+                    return undefined;
                 data = data[key];
+            }
             // Return deep data.
             return data;
         }

@@ -349,10 +349,10 @@ export type UIUpdateCompareMode = "always" | "changed" | "shallow" | "double" | 
  * .. Note that the pure checks only check those types that have just been changed.
  */
 export interface UIUpdateCompareModesBy {
-    props: UIUpdateCompareMode;
-    state: UIUpdateCompareMode;
-    remote: UIUpdateCompareMode;
-    children: UIUpdateCompareMode;
+    props: UIUpdateCompareMode | number;
+    state: UIUpdateCompareMode | number;
+    remote: UIUpdateCompareMode | number;
+    children: UIUpdateCompareMode | number;
 }
 
 
@@ -724,8 +724,8 @@ export interface UIHostSettings {
      * .. However, most of them will be empty, and Context and Children will only be there if specifically asked for by needsChildren or needsData. */
     updateLiveModes: UIUpdateCompareModesBy;
 
-    /** Defines how mini functional components should update. See UIUpdateCompareMode for details. */
-    updateMiniMode: UIUpdateCompareMode;
+    /** Defines how mini functional components should update. See UIUpdateCompareMode for details, or use number to define the depth (-1 for deep). */
+    updateMiniMode: UIUpdateCompareMode | number;
 
     /** Whether does a equalDomProps check on the updating process.
      * - If true: Only adds render info (for updating dom props) if there's a need for it.

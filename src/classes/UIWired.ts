@@ -41,7 +41,7 @@ export class UIWired<BaseProps = any> extends UIMini<BaseProps> {
 
     // - Settings that will be used for UIMini purposes (automatically used by all instances) - //
 
-    public static updateMode: UIUpdateCompareMode | null;
+    public static updateMode: UIUpdateCompareMode | number | null;
     public static uiWillMount?(mini: UIMini): void;
     public static uiDidMount?(mini: UIMini): void;
     public static uiShouldUpdate?(mini: UIMini, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
@@ -87,7 +87,7 @@ export type UIWiredType<BaseProps = {}, AddedProps = {}, MixedProps = BaseProps 
     /** Default update mode.
      * - By default, we are in "always" mode, because this is an intermediary boundary: each wired target will anyway do its checking.
      * - This is to prevent rare cases where would feel like a bug - without having to go deep into the docs or code to find out why. */
-    updateMode: UIUpdateCompareMode | null;
+    updateMode: UIUpdateCompareMode | number | null;
 
 
     // - Methods - //
@@ -145,7 +145,7 @@ export const createWired = <
     /** Default update mode.
      * - By default, we are in "always" mode, because this is an intermediary boundary: each wired target will anyway do its checking.
      * - This is to prevent rare cases where would feel like a bug - without having to go deep into the docs or code to find out why. */
-    public static updateMode: UIUpdateCompareMode | null = "always";
+    public static updateMode: UIUpdateCompareMode | number | null = "always";
 
     public static getAddedProps(): AddedProps {
         return Wired.builder ? Wired.builder(Wired.addedProps, ...params) : Wired.addedProps;

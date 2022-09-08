@@ -17,6 +17,8 @@ import {
     UIDomTag,
     HTMLSVGAttributes,
     UIComponentProps,
+    UIGenericProps,
+    UIComponent,
 } from "./_Types";
 // import { JSXInternal } from "./_JSX";
 
@@ -37,7 +39,8 @@ import { UIContextsProps } from "../classes/UIContext";
 
 /** Create a rendering definition. Supports receive direct JSX compiled output. */
 export function createDef<DomTag extends UIDomTag>(domTag: DomTag, origProps?: HTMLSVGAttributes<DomTag> | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
-export function createDef<Props extends Dictionary = {}>(componentTag: UIComponentTag<Props>, origProps?: (Props & UIComponentProps) | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+export function createDef<Props extends Dictionary>(componentTag: UIComponentTag<Props>, origProps?: (Props & UIComponentProps) | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+export function createDef<Props extends UIGenericProps | UIComponentProps>(tag: UIDomTag | UIComponent<Props>, origProps?: Props | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
 export function createDef(tagOrClass: UIPreTag, origProps: Dictionary | null = null, ...contents: UIRenderOutput[]): UIDefTarget | null {
     // Get type.
     const defType = _Defs.getDefType(tagOrClass);

@@ -1665,15 +1665,19 @@ export const _Apply = {
     shouldUpdateBy(boundary: UISourceBoundary, preUpdates: UILiveUpdates | null, updates: UILiveUpdates): boolean {
         // Prepare.
         const settings = boundary.uiHost.settings;
-        const modes = boundary.live ? boundary.live.updateModes : { props: boundary.mini && (boundary.mini.updateMode || (boundary.mini.constructor as UIWiredType).updateMode) || settings.updateMiniMode };
+        const modes = boundary.live ?
+            boundary.live.updateModes :
+            { props: boundary.mini && (boundary.mini.updateMode ?? (boundary.mini.constructor as UIWiredType).updateMode ?? settings.updateMiniMode) };
         // If anything tells us to update, we do the update: so can return true from within, but not false.
         let didCheck = false;
         if (preUpdates) {
             for (const type in preUpdates) {
                 // Prepare.
                 didCheck = true;
-                const mode: UIUpdateCompareMode = modes[type] || settings.updateLiveModes[type];
-                // Do the check.
+                const mode: UIUpdateCompareMode | number = modes[type] ?? settings.updateLiveModes[type];
+                // Do the check - if -1, then deep, below -1 is always, and 0 or positive means depth.
+                if (typeof mode === "number")
+                    return mode < -1 || !_Lib.areEqual(preUpdates[type], updates[type], mode);
                 switch(mode) {
                     case "always":
                         return true;
@@ -1682,15 +1686,15 @@ export const _Apply = {
                             return true;
                         break;
                     case "shallow":
-                        if (!_Lib.areEqual(preUpdates[type] || {}, updates[type], 1))
+                        if (!_Lib.areEqual(preUpdates[type], updates[type], 1))
                             return true;
                         break;
                     case "double":
-                        if (!_Lib.areEqual(preUpdates[type] || {}, updates[type], 2))
+                        if (!_Lib.areEqual(preUpdates[type], updates[type], 2))
                             return true;
                         break;
                     case "deep":
-                        if (!_Lib.areEqual(preUpdates[type] || {}, updates[type], -1))
+                        if (!_Lib.areEqual(preUpdates[type], updates[type], -1))
                             return true;
                         break;
                 }

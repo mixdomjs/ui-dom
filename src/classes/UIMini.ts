@@ -31,7 +31,7 @@ function _UIMiniMixin<Props = any>(Base: ClassType) {
 
         public readonly uiBoundary: UIMiniBoundary;
         public readonly props: Props;
-        public updateMode: UIUpdateCompareMode | null;
+        public updateMode: UIUpdateCompareMode | number | null;
 
         // - Methods - //
 
@@ -48,7 +48,7 @@ function _UIMiniMixin<Props = any>(Base: ClassType) {
 
         // - Update mode - //
 
-        public setUpdateMode(updateMode: UIUpdateCompareMode | null): void {
+        public setUpdateMode(updateMode: UIUpdateCompareMode | number | null): void {
             this.updateMode = updateMode;
         }
 
@@ -108,7 +108,7 @@ export interface UIMini<Props = {}> {
      * - Note that for UIMini, you can't define the needs for children.
      *   .. The setting is always in the default host based mode for children, by default it's "changed".
      *   .. Accordingly children are not part of the .uiShouldUpdate(prevProps, nextProps). */
-    updateMode: UIUpdateCompareMode | null;
+    updateMode: UIUpdateCompareMode | number | null;
 
 
     // - Update mode - //
@@ -116,7 +116,7 @@ export interface UIMini<Props = {}> {
     /** Set the update mode for this particular renderer instance.
      * - If null uses settings.updateMiniMode from uiHost.
      * - Note that you can also assign the .uiShouldUpdate method to affect this. */
-    setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
+    setUpdateMode(updateMode: UIUpdateCompareMode | number | null): void;
 
 
     // - Getters - //

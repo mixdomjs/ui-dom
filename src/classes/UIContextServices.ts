@@ -191,9 +191,11 @@ export class UIContextServices {
                 this.pendingKeys = [...refreshKeys];
             // Add if weren't there already.
             else {
-                for (const key of refreshKeys)
-                    if (this.pendingKeys.indexOf(key) === -1)
+                for (const key of refreshKeys) {
+                    // Add if not already included by a direct match or by a parenting branch.
+                    if (!this.pendingKeys.some(otherKey => otherKey === key || key.startsWith(otherKey + ".")))
                         this.pendingKeys.push(key);
+                }
             }
         }
     }
@@ -226,7 +228,7 @@ export class UIContextServices {
                     else if (ctxNeeds) {
                         // Check by keywords. For large contexts, this can often cull out most.
                         for (const key of refreshKeys as string[]) {
-                            if (ctxNeeds.some(need => need === key || need.startsWith(key + "."))) {
+                            if (ctxNeeds.some(need => need === key || need.startsWith(key + ".") || key.startsWith(need + "."))) {
                                 doesNeed = true;
                                 break;
                             }

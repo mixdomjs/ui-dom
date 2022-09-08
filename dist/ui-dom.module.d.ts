@@ -425,8 +425,8 @@ declare const UIMini_base: {
     new (props: any, boundary?: UISourceBoundary | undefined, ...passArgs: any[]): {
         readonly uiBoundary: UIMiniBoundary<{}>;
         readonly props: any;
-        updateMode: UIUpdateCompareMode | null;
-        setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
+        updateMode: number | UIUpdateCompareMode | null;
+        setUpdateMode(updateMode: number | UIUpdateCompareMode | null): void;
         getChildren(skipNeeds?: boolean, shallowCopy?: boolean): readonly UIDefTarget[];
         needsChildren(needs?: boolean | "temp" | null | undefined): void;
         isMounted(): boolean;
@@ -456,11 +456,11 @@ interface UIMini<Props = {}> {
      * - Note that for UIMini, you can't define the needs for children.
      *   .. The setting is always in the default host based mode for children, by default it's "changed".
      *   .. Accordingly children are not part of the .uiShouldUpdate(prevProps, nextProps). */
-    updateMode: UIUpdateCompareMode | null;
+    updateMode: UIUpdateCompareMode | number | null;
     /** Set the update mode for this particular renderer instance.
      * - If null uses settings.updateMiniMode from uiHost.
      * - Note that you can also assign the .uiShouldUpdate method to affect this. */
-    setUpdateMode(updateMode: UIUpdateCompareMode | null): void;
+    setUpdateMode(updateMode: UIUpdateCompareMode | number | null): void;
     isMounted(): boolean;
     queryDomElement<T extends Element = Element>(selector: string, withinBoundaries?: boolean, overHosts?: boolean): T | null;
     queryDomElements<T extends Element = Element>(selector: string, maxCount?: number, withinBoundaries?: boolean, overHosts?: boolean): T[];
@@ -1799,10 +1799,10 @@ declare type UIUpdateCompareMode = "always" | "changed" | "shallow" | "double" |
  * .. Note that the pure checks only check those types that have just been changed.
  */
 interface UIUpdateCompareModesBy {
-    props: UIUpdateCompareMode;
-    state: UIUpdateCompareMode;
-    remote: UIUpdateCompareMode;
-    children: UIUpdateCompareMode;
+    props: UIUpdateCompareMode | number;
+    state: UIUpdateCompareMode | number;
+    remote: UIUpdateCompareMode | number;
+    children: UIUpdateCompareMode | number;
 }
 /** Differences made to a dom element. Note that this never includes tag changes, because it requires creating a new element. */
 interface UIHTMLDiffs {
@@ -2113,8 +2113,8 @@ interface UIHostSettings {
      * By default looks in all 4 places for change: 1. Props, 2. State, 3. Context, 4. Children.
      * .. However, most of them will be empty, and Context and Children will only be there if specifically asked for by needsChildren or needsData. */
     updateLiveModes: UIUpdateCompareModesBy;
-    /** Defines how mini functional components should update. See UIUpdateCompareMode for details. */
-    updateMiniMode: UIUpdateCompareMode;
+    /** Defines how mini functional components should update. See UIUpdateCompareMode for details, or use number to define the depth (-1 for deep). */
+    updateMiniMode: UIUpdateCompareMode | number;
     /** Whether does a equalDomProps check on the updating process.
      * - If true: Only adds render info (for updating dom props) if there's a need for it.
      * - If false: Always adds render info for updating dom elements. They will be diffed anyhow.
@@ -2237,7 +2237,7 @@ declare class UIWired<BaseProps = any> extends UIMini<BaseProps> {
     static setProps(_props: Dictionary, _update?: boolean, _forceUpdateTimeout?: number | null, _forceRenderTimeout?: number | null): void;
     static getAddedProps(): Record<string, any>;
     static getMixedProps(_props: Dictionary): Record<string, any>;
-    static updateMode: UIUpdateCompareMode | null;
+    static updateMode: UIUpdateCompareMode | number | null;
     static uiWillMount?(mini: UIMini): void;
     static uiDidMount?(mini: UIMini): void;
     static uiShouldUpdate?(mini: UIMini, preProps: Dictionary | null, newProps: Dictionary | null): boolean | null;
@@ -2262,7 +2262,7 @@ declare type UIWiredType<BaseProps = {}, AddedProps = {}, MixedProps = BaseProps
     /** Default update mode.
      * - By default, we are in "always" mode, because this is an intermediary boundary: each wired target will anyway do its checking.
      * - This is to prevent rare cases where would feel like a bug - without having to go deep into the docs or code to find out why. */
-    updateMode: UIUpdateCompareMode | null;
+    updateMode: UIUpdateCompareMode | number | null;
     getAddedProps(): AddedProps;
     getMixedProps(props: BaseProps): MixedProps;
     /** Call this to rebuild the wired part of props and force a refresh on the instances.
@@ -2367,7 +2367,8 @@ declare const UIEffectMixin: ClassBaseMixer<UIEffect<any>>;
 
 /** Create a rendering definition. Supports receive direct JSX compiled output. */
 declare function createDef<DomTag extends UIDomTag>(domTag: DomTag, origProps?: HTMLSVGAttributes<DomTag> | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
-declare function createDef<Props extends Dictionary = {}>(componentTag: UIComponentTag<Props>, origProps?: (Props & UIComponentProps) | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+declare function createDef<Props extends Dictionary>(componentTag: UIComponentTag<Props>, origProps?: (Props & UIComponentProps) | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
+declare function createDef<Props extends UIGenericProps | UIComponentProps>(tag: UIDomTag | UIComponent<Props>, origProps?: Props | null, ...contents: UIRenderOutput[]): UIDefTarget | null;
 
 declare const uiDef: typeof createDef;
 declare const uiContent: UIDefTarget;

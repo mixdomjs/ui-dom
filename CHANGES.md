@@ -1,3 +1,20 @@
+## v2.4.2
+
+### Features
+
+- Added support to automatically create nested data structure with `context.setInData` method.
+- Likewise added support to not fail if data doesn't exist with `context.getInData` method.
+- Added support to set depth by number for `live.updateModes `and `mini.updateMode` and the respective setters.
+
+### Fixes
+
+- Fixed a terrible typo in context `setInData` method.
+- Also fixed the logic for refreshing deep data in the other-way-around -cases (where needs a larger branch but uses nested data in it).
+
+### Typing
+
+- Added a createDef overload for TypeScript that accepts variable dom tag and component.
+
 ## v2.4.1
 
 ### TypeScript v4.8 support
